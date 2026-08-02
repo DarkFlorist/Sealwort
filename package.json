@@ -1,0 +1,32 @@
+{
+	"name": "sealwort",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Review, verify, sign, and execute Interceptor Gnosis Safe transactions",
+	"repository": "https://github.com/DarkFlorist/Sealwort",
+	"license": "Unlicense",
+	"type": "module",
+	"packageManager": "bun@1.3.14",
+	"scripts": {
+		"build": "bun ./scripts/build.mts",
+		"test": "bun test",
+		"typecheck": "bun --bun tsc --noEmit --project tsconfig.json",
+		"check": "bun run test && bun run typecheck && bun run build",
+		"ui:docker": "docker build --file Dockerfile --tag sealwort-ui . && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui"
+	},
+	"dependencies": {
+		"@noble/curves": "1.9.1",
+		"@noble/hashes": "1.8.0",
+		"@preact/signals": "1.1.3",
+		"funtypes": "5.1.0",
+		"micro-eth-signer": "0.19.0",
+		"preact": "10.24.2"
+	},
+	"devDependencies": {
+		"@types/bun": "1.3.14",
+		"@happy-dom/global-registrator": "20.11.1",
+		"@testing-library/preact": "3.2.4",
+		"happy-dom": "20.11.1",
+		"typescript": "5.9.3"
+	}
+}

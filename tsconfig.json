@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"allowImportingTsExtensions": false,
+		"allowJs": false,
+		"checkJs": false,
+		"exactOptionalPropertyTypes": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact",
+		"lib": ["DOM", "ES2023"],
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"noEmit": true,
+		"noImplicitAny": true,
+		"noUncheckedIndexedAccess": true,
+		"strict": true,
+		"target": "ES2023"
+	},
+	"include": ["scripts/**/*.mts", "src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"]
+}

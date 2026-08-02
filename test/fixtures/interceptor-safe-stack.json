@@ -1,0 +1,59 @@
+{
+	"name": "Interceptor Safe Stack",
+	"version": "1.0.0",
+	"stacks": [
+		{
+			"chainId": "0x1",
+			"safeAddress": "0x1234567890123456789012345678901234567890",
+			"safeVersion": "1.4.1",
+			"baseNonce": "0x7",
+			"threshold": "0x2",
+			"transactions": [
+				{
+					"safeTx": {
+						"types": {
+							"SafeTx": [
+								{ "name": "to", "type": "address" },
+								{ "name": "value", "type": "uint256" },
+								{ "name": "data", "type": "bytes" },
+								{ "name": "operation", "type": "uint8" },
+								{ "name": "safeTxGas", "type": "uint256" },
+								{ "name": "baseGas", "type": "uint256" },
+								{ "name": "gasPrice", "type": "uint256" },
+								{ "name": "gasToken", "type": "address" },
+								{ "name": "refundReceiver", "type": "address" },
+								{ "name": "nonce", "type": "uint256" }
+							],
+							"EIP712Domain": [
+								{ "name": "chainId", "type": "uint256" },
+								{ "name": "verifyingContract", "type": "address" }
+							]
+						},
+						"primaryType": "SafeTx",
+						"domain": {
+							"chainId": "0x1",
+							"verifyingContract": "0x1234567890123456789012345678901234567890"
+						},
+						"message": {
+							"to": "0x9876543210987654321098765432109876543210",
+							"value": "0",
+							"data": "0x",
+							"operation": "0",
+							"safeTxGas": "0",
+							"baseGas": "0",
+							"gasPrice": "0",
+							"gasToken": "0x0000000000000000000000000000000000000000",
+							"refundReceiver": "0x0000000000000000000000000000000000000000",
+							"nonce": "7"
+						}
+					},
+					"safeTxHash": "0xfad24652122e73522ccfff8d1b88206cc396dcc83cf7a9b438b8113cf144d028",
+					"created": "0x6a67f100",
+					"websiteOrigin": "http://safe-cosigning.test",
+					"transactionIdentifier": "0x1",
+					"signatures": []
+				}
+			]
+		}
+	]
+}
