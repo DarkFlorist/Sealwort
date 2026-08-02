@@ -1,0 +1,19 @@
+{
+	"request": {
+		"method": "wallet_getCapabilities",
+		"params": [
+			"0x1616161616161616161616161616161616161616",
+			["0x1"]
+		]
+	},
+	"result": {
+		"0x1": {
+			"gnosisSafeExecution": {
+				"supported": true,
+				"version": "1.0.0",
+				"activeSigner": "0x1717171717171717171717171717171717171717",
+				"submissionMethod": "eth_sendTransaction"
+			}
+		}
+	}
+}

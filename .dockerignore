@@ -1,0 +1,12 @@
+.git/
+.github/
+.github-workflows/
+.ci-agents/
+docs/
+test/
+node_modules/
+src/dist/
+.env
+.env.*
+*.car
+*.log
