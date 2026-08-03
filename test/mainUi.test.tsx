@@ -130,6 +130,18 @@ describe('Sealwort rendered UI', () => {
 		assert.deepEqual(onSignCalls, [{ transactionIndex: 0, execute: false }, { transactionIndex: 0, execute: true }])
 		assert.equal(screen.getByRole('heading', { name: 'Gnosis Safe Transaction 3' }) !== undefined, true)
 		assert.equal(screen.getByText('0 / 1 signatures') !== undefined, true)
+		assert.equal(screen.getByText('Your signature will reach the required threshold. Choose whether to add the signature only or sign and execute.') !== undefined, true)
+	})
+
+	test('asks a connected Safe wallet user to review the transaction before approval', () => {
+		renderStack({
+			account: safeAddress,
+			accountInformation: { kind: 'safe', address: safeAddress, chainId: 11155111n, state: verifiedState },
+			routedSigner: owner,
+			currentConnectedSafeBalances: { native: availableNativeAsset },
+		})
+
+		assert.equal(screen.getByText('Review the transaction in your connected Safe wallet before approving it.') !== undefined, true)
 	})
 
 	test('a threshold-ready transaction executes and displays action errors below its controls', () => {
