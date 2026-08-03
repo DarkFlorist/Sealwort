@@ -3,12 +3,15 @@ import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js
 export const DEFAULT_WALLET_REQUEST_TIMEOUT_MS = 15_000
 export const INTERACTIVE_WALLET_REQUEST_TIMEOUT_MS = 120_000
 
-function isInteractiveWalletRequest(method: string) {
-	return method === 'eth_requestAccounts'
-		|| method === 'eth_sendTransaction'
+function requiresUnlimitedReviewTime(method: string) {
+	return method === 'eth_sendTransaction'
 		|| method === 'eth_sign'
 		|| method === 'personal_sign'
 		|| method.startsWith('eth_signTypedData')
+}
+
+function isInteractiveWalletRequest(method: string) {
+	return method === 'eth_requestAccounts'
 		|| method === 'wallet_requestPermissions'
 		|| method === 'wallet_switchEthereumChain'
 		|| method === 'wallet_addEthereumChain'
@@ -26,6 +29,7 @@ export function withWalletRequestTimeout(
 	if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error('The wallet request timeout must be a positive number.')
 	return {
 		async request(request: ProviderRequest) {
+			if (requiresUnlimitedReviewTime(request.method)) return await provider.request(request)
 			const requestTimeoutMs = timeoutMs ?? (isInteractiveWalletRequest(request.method)
 				? INTERACTIVE_WALLET_REQUEST_TIMEOUT_MS
 				: DEFAULT_WALLET_REQUEST_TIMEOUT_MS)
