@@ -49,6 +49,7 @@ export function useWalletState() {
 	const stopLoading = (operationRevision: number) => {
 		if (!isCurrent(operationRevision)) return
 		informationLoading.value = false
+		balancesLoading.value = false
 		loading.value = false
 		safeWalletSignerLoading.value = false
 	}
@@ -69,20 +70,28 @@ export function useWalletState() {
 			return
 		}
 		informationLoading.value = true
-		const inspectedAccount = await inspectConnectedAccount(provider, selectedAccount, selectedChainId)
-		if (!isCurrent(operationRevision)) return
-		if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
-		balancesLoading.value = inspectedAccount.kind === 'safe'
-		if (inspectedAccount.kind === 'safe') {
-			void readConnectedSafeBalances(provider, selectedAccount, selectedChainId).then((updatedBalances) => {
-				if (balancesRevision.peek() !== balanceOperationRevision || !isCurrent(operationRevision)) return
-				if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
-				balances.value = { address: selectedAccount, chainId: selectedChainId, balances: updatedBalances }
-				balancesLoading.value = false
-			})
+		try {
+			const inspectedAccount = await inspectConnectedAccount(provider, selectedAccount, selectedChainId)
+			if (!isCurrent(operationRevision)) return
+			if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
+			balancesLoading.value = inspectedAccount.kind === 'safe'
+			if (inspectedAccount.kind === 'safe') {
+				void readConnectedSafeBalances(provider, selectedAccount, selectedChainId).then((updatedBalances) => {
+					if (balancesRevision.peek() !== balanceOperationRevision || !isCurrent(operationRevision)) return
+					if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
+					balances.value = { address: selectedAccount, chainId: selectedChainId, balances: updatedBalances }
+				}).finally(() => {
+					if (balancesRevision.peek() !== balanceOperationRevision || !isCurrent(operationRevision)) return
+					if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
+					balancesLoading.value = false
+				})
+			}
+			information.value = inspectedAccount
+		} finally {
+			if (isCurrent(operationRevision) && account.peek() === selectedAccount && chainId.peek() === selectedChainId) {
+				informationLoading.value = false
+			}
 		}
-		information.value = inspectedAccount
-		informationLoading.value = false
 	}
 
 	const refreshSafeWalletSigner = async (
@@ -96,31 +105,42 @@ export function useWalletState() {
 		safeWalletSigners.value = []
 		safeWalletSignerLoading.value = selectedAccount !== undefined
 		if (selectedAccount === undefined) return
-		const signer = await getConnectedSafeWalletSigner(provider, selectedAccount, selectedChainId)
-		if (safeWalletSignerRevision.peek() !== signerOperationRevision || !isCurrent(operationRevision)) return
-		if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
-		if (signer !== undefined) safeWalletSigners.value = [{ safeAddress: selectedAccount, signer }]
-		safeWalletSignerLoading.value = false
+		try {
+			const signer = await getConnectedSafeWalletSigner(provider, selectedAccount, selectedChainId)
+			if (safeWalletSignerRevision.peek() !== signerOperationRevision || !isCurrent(operationRevision)) return
+			if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
+			if (signer !== undefined) safeWalletSigners.value = [{ safeAddress: selectedAccount, signer }]
+		} finally {
+			if (
+				safeWalletSignerRevision.peek() === signerOperationRevision
+				&& isCurrent(operationRevision)
+				&& account.peek() === selectedAccount
+				&& chainId.peek() === selectedChainId
+			) safeWalletSignerLoading.value = false
+		}
 	}
 
 	const load = async (provider: InjectedProvider, operationRevision: number, requestAccess: boolean) => {
-		const [accountsResult, chainIdResult] = await Promise.all([
-			provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' }),
-			provider.request({ method: 'eth_chainId' }),
-		])
-		const accounts = EthereumAccounts.parse(accountsResult)
-		const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
-		if (!isCurrent(operationRevision)) return undefined
-		const selectedAccount = accounts[0]
-		account.value = selectedAccount
-		chainId.value = selectedChainId
-		if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
-		const accountInformationPromise = refreshAccountInformation(provider, selectedAccount, selectedChainId, operationRevision)
-		void refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision)
-		await accountInformationPromise
-		if (!isCurrent(operationRevision)) return undefined
-		loading.value = false
-		return { account: selectedAccount, chainId: selectedChainId }
+		try {
+			const [accountsResult, chainIdResult] = await Promise.all([
+				provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' }),
+				provider.request({ method: 'eth_chainId' }),
+			])
+			const accounts = EthereumAccounts.parse(accountsResult)
+			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
+			if (!isCurrent(operationRevision)) return undefined
+			const selectedAccount = accounts[0]
+			account.value = selectedAccount
+			chainId.value = selectedChainId
+			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
+			const accountInformationPromise = refreshAccountInformation(provider, selectedAccount, selectedChainId, operationRevision)
+			void refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision)
+			await accountInformationPromise
+			if (!isCurrent(operationRevision)) return undefined
+			return { account: selectedAccount, chainId: selectedChainId }
+		} finally {
+			if (isCurrent(operationRevision)) loading.value = false
+		}
 	}
 
 	return {

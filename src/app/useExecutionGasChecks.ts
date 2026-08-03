@@ -7,6 +7,7 @@ import type { SafeStackExport } from './safeStackProtocol.js'
 import type { VerifiedSafeState } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { getExecutionGasFundingDisabledReason } from './uiState.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 
 export function useExecutionGasChecks(
 	stackExport: SafeStackExport | undefined,
@@ -14,6 +15,7 @@ export function useExecutionGasChecks(
 	walletChainId: bigint | undefined,
 	connectedSafeWalletSigners: readonly ConnectedSafeWalletSigner[],
 	verifiedSafeStates: readonly VerifiedSafeState[],
+	walletRequestTimeoutMs?: number,
 ) {
 	const checks = useSignal<readonly ExecutionGasCheck[]>([])
 	const revision = useSignal(0)
@@ -21,11 +23,12 @@ export function useExecutionGasChecks(
 	useEffect(() => {
 		const checkRevision = revision.peek() + 1
 		revision.value = checkRevision
-		const provider = window.ethereum
-		if (provider === undefined || stackExport === undefined || account === undefined || walletChainId === undefined) {
+		const injectedProvider = window.ethereum
+		if (injectedProvider === undefined || stackExport === undefined || account === undefined || walletChainId === undefined) {
 			checks.value = []
 			return
 		}
+		const provider = withWalletRequestTimeout(injectedProvider, walletRequestTimeoutMs)
 		const targets = stackExport.stacks.flatMap((stack, stackIndex) => {
 			if (stack.chainId !== walletChainId) return []
 			const safeState = verifiedSafeStates[stackIndex]
@@ -66,7 +69,7 @@ export function useExecutionGasChecks(
 			if (revision.peek() !== checkRevision) return
 			checks.value = updatedChecks
 		})
-	}, [stackExport, account, walletChainId, connectedSafeWalletSigners, verifiedSafeStates])
+	}, [stackExport, account, walletChainId, connectedSafeWalletSigners, verifiedSafeStates, walletRequestTimeoutMs])
 
 	return checks
 }
