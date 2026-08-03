@@ -160,7 +160,7 @@ export function SafeStackPanel({
 			const executionFundingCheckLoading = visibleExecutionFundingReason === pendingExecutionGasCheckReason && (executionGasCheck === undefined || executionGasCheck.status === 'loading')
 			const executionFundingLoading = executionFundingCheckLoading || visibleExecutionFundingReason === nativeTransferDisabledReason && nativeAssetLoading
 			const actionExplanation = ready ? executionPrerequisiteDisabledReason : alreadySignedReason ?? (finalSignatureNeeded
-				? signatureDisabledReason ?? (usingConnectedSafeWallet ? 'The connected Safe wallet signer approval will satisfy the threshold and can execute this transaction immediately.' : 'Your signature will satisfy the threshold. You can add it to the stack or sign and execute the transaction immediately.')
+				? signatureDisabledReason ?? (usingConnectedSafeWallet ? undefined : 'Your signature will satisfy the threshold. You can add it to the stack or sign and execute the transaction immediately.')
 				: signatureDisabledReason ?? 'Review every field before asking your wallet to sign.')
 			const actionDescriptionIds = [actionExplanation === undefined ? undefined : actionExplanationId, transactionActionError === undefined ? undefined : actionErrorId].filter((value) => value !== undefined)
 			const actionDescription = actionDescriptionIds.length === 0 ? undefined : actionDescriptionIds.join(' ')

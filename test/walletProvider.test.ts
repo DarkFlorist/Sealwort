@@ -25,4 +25,18 @@ describe('wallet provider request timeout', () => {
 
 		assert.equal(await provider.request({ method: 'eth_chainId' }), 'eth_chainId response')
 	})
+
+	test('allows unlimited review time for signing and transaction submission', async () => {
+		const methods = ['eth_sendTransaction', 'eth_sign', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4']
+		const provider = withWalletRequestTimeout({
+			async request(request) {
+				await Bun.sleep(20)
+				return `${ request.method } approved`
+			},
+		}, 5)
+
+		await Promise.all(methods.map(async (method) => {
+			assert.equal(await provider.request({ method }), `${ method } approved`)
+		}))
+	})
 })
