@@ -6,10 +6,12 @@ import { getSafeReadProvider } from './readProvider.js'
 import { readSafeState } from './safeStackValidation.js'
 import { isCurrentStackOperation } from './stackOperationState.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 
 export function useSafeInformation(
 	stackRevision: Signal<number>,
 	stackExport: Signal<SafeStackExport | undefined>,
+	walletRequestTimeoutMs?: number,
 ) {
 	const information = useSignal<readonly SafeInformation[]>([])
 	const informationRevision = useSignal(0)
@@ -31,7 +33,10 @@ export function useSafeInformation(
 		}
 		await Promise.all(loadedStack.stacks.map(async (stack, stackIndex) => {
 			try {
-				const safeReadProvider = await getSafeReadProvider(stack.chainId, window.ethereum)
+				const injectedProvider = window.ethereum === undefined
+					? undefined
+					: withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
+				const safeReadProvider = await getSafeReadProvider(stack.chainId, injectedProvider)
 				updateInformation(stackIndex, (current) => ({ ...current, source: safeReadProvider.source }))
 				void readNativeAssetBalance(safeReadProvider.provider, stack.safeAddress, stack.chainId).then((nativeAsset) => {
 					updateInformation(stackIndex, (current) => ({ ...current, nativeAssetLoading: false, nativeAsset }))

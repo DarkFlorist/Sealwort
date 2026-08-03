@@ -13,10 +13,11 @@ import { isCurrentStackOperation } from './stackOperationState.js'
 import { getExecutionGasFundingDisabledReason } from './uiState.js'
 import { getUserFacingErrorMessage, isUserRejectedError } from './userFacingErrors.js'
 import { getConnectedSafeWalletDuplicateSignerMessage, getConnectedSafeWalletSigner } from './walletCapabilities.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 
-async function getProvider() {
+async function getProvider(walletRequestTimeoutMs: number | undefined) {
 	if (window.ethereum === undefined) throw new Error('No injected Ethereum wallet was found.')
-	return window.ethereum
+	return withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
 }
 
 async function assertExecutionGasFunding(
@@ -60,6 +61,7 @@ export function createTransactionActions({
 	signedStackJson,
 	submittedExecutions,
 	transactionActionErrors,
+	walletRequestTimeoutMs,
 }: {
 	readonly persistStackText: (text: string) => void
 	readonly stackExport: Signal<SafeStackExport | undefined>
@@ -75,6 +77,7 @@ export function createTransactionActions({
 	readonly signedStackJson: Signal<string | undefined>
 	readonly submittedExecutions: Signal<readonly SubmittedExecution[]>
 	readonly transactionActionErrors: Signal<readonly TransactionActionError[]>
+	readonly walletRequestTimeoutMs: number | undefined
 }) {
 	const finishPendingAction = (action: PendingAction) => {
 		if (pendingAction.peek() === action) pendingAction.value = undefined
@@ -147,7 +150,7 @@ export function createTransactionActions({
 			pendingAction.value = action
 			clearTransactionActionError(transaction.safeTxHash)
 			error.value = undefined
-			const provider = await getProvider()
+			const provider = await getProvider(walletRequestTimeoutMs)
 			const currentSafeStates = await validateSafeStackAtCurrentNonce(provider, currentExport)
 			const safeState = currentSafeStates[stackIndex]
 			if (!isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport)) return
@@ -278,7 +281,7 @@ export function createTransactionActions({
 			pendingAction.value = action
 			clearTransactionActionError(transaction.safeTxHash)
 			error.value = undefined
-			const provider = await getProvider()
+			const provider = await getProvider(walletRequestTimeoutMs)
 			const executionResult = await runExecutionAttempt({
 				prepare: async () => {
 					const currentSafeStates = await readExecutableSafeStates(provider, currentExport, stackIndex, transaction)

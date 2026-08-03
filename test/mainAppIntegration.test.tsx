@@ -8,6 +8,7 @@ import { createSafeTx, encodeSafeTransactionHashCall, getSafeTxHash, safeTxToTyp
 import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction } from '../src/app/safeStackProtocol.js'
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { PERSISTED_SAFE_STACK_STORAGE_KEY, SAFE_STACK_PERSISTENCE_WARNING } from '../src/app/uiState.js'
+import { getWalletRequestTimeoutMessage } from '../src/app/walletProvider.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
 const ownerPrivateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -87,6 +88,7 @@ function createProviderHarness(options: {
 	readonly activeSafeSigner?: bigint
 	readonly walletCapabilitiesResult?: Promise<unknown>
 	readonly threshold?: bigint
+	readonly hangingMethod?: string
 } = {}): ProviderHarness {
 	let accounts = [...(options.accounts ?? [addr.addChecksum(`0x${ ownerAddress.toString(16).padStart(40, '0') }`)])]
 	let signatureRequests = 0
@@ -110,6 +112,7 @@ function createProviderHarness(options: {
 		},
 		async request(request) {
 			requestedMethods.push(request.method)
+			if (request.method === options.hangingMethod) return await new Promise<never>(() => undefined)
 			switch (request.method) {
 				case 'eth_accounts':
 					if (failNextWalletIdentityRequest) {
@@ -216,6 +219,20 @@ describe('Sealwort app wallet workflows', () => {
 		assert.notEqual(screen.getByRole('button', { name: 'Connect signer wallet' }), undefined)
 	})
 
+	test('stops loading and identifies the RPC method when Safe account inspection times out', async () => {
+		const harness = createProviderHarness({
+			accounts: [`0x${ safeAddress.toString(16).padStart(40, '0') }`],
+			hangingMethod: 'eth_getCode',
+		})
+		window.ethereum = harness.provider
+		render(<App walletRequestTimeoutMs = { 5 } />)
+
+		await screen.findByText(`Sealwort could not inspect this account: ${ getWalletRequestTimeoutMessage('eth_getCode') }`)
+		assert.equal(screen.queryByText('Loading…'), null)
+		assert.equal(screen.queryByText('Loading account, Gnosis Safe information, and stack verification…'), null)
+		assert.notEqual(screen.getByRole('button', { name: 'Refresh' }), undefined)
+	})
+
 	test('restores a persisted stack and remains retryable after a rejected signature request', async () => {
 		const harness = createProviderHarness({ rejectFirstSignature: true })
 		window.ethereum = harness.provider
@@ -263,7 +280,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack())),
 		)
-		render(<App />)
+		render(<App walletRequestTimeoutMs = { 5 } />)
 
 		const signButton = await screen.findByRole('button', { name: 'Add my signature' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(signButton.hasAttribute('disabled'), false))
@@ -277,7 +294,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack())),
 		)
-		render(<App />)
+		render(<App walletRequestTimeoutMs = { 5 } />)
 
 		const signButton = await screen.findByRole('button', { name: 'Add my signature' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(signButton.hasAttribute('disabled'), false))

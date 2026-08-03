@@ -16,6 +16,7 @@ import { useExecutionGasChecks } from './useExecutionGasChecks.js'
 import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -32,7 +33,13 @@ function getBrowserStorage() {
 	}
 }
 
-export function App({ browserStorage = getBrowserStorage() }: { readonly browserStorage?: SafeStackStorage } = {}) {
+export function App({
+	browserStorage = getBrowserStorage(),
+	walletRequestTimeoutMs,
+}: {
+	readonly browserStorage?: SafeStackStorage
+	readonly walletRequestTimeoutMs?: number
+} = {}) {
 	const stackExport = useSignal<SafeStackExport | undefined>(undefined)
 	const stackVerified = useSignal(false)
 	const verifiedSafeStates = useSignal<readonly VerifiedSafeState[]>([])
@@ -65,7 +72,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 	const importTextarea = useRef<HTMLTextAreaElement>(null)
 	const updatedStackTextarea = useRef<HTMLTextAreaElement>(null)
 	const stackRevision = useSignal(0)
-	const { information: safeInformation, refresh: refreshSafeInformation } = useSafeInformation(stackRevision, stackExport)
+	const { information: safeInformation, refresh: refreshSafeInformation } = useSafeInformation(stackRevision, stackExport, walletRequestTimeoutMs)
 	const signedStackJson = useSignal<string | undefined>(undefined)
 	const submittedExecutions = useSignal<readonly SubmittedExecution[]>([])
 	const transactionActionErrors = useSignal<readonly TransactionActionError[]>([])
@@ -122,6 +129,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 	}
 
 	const refreshEverything = async (provider: InjectedProvider, manual: boolean) => {
+		const requestProvider = withWalletRequestTimeout(provider, walletRequestTimeoutMs)
 		const action = 'refresh'
 		const refreshRevision = stackRevision.peek() + 1
 		stackRevision.value = refreshRevision
@@ -134,7 +142,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 		stackVerificationLoading.value = loadedStack !== undefined
 		try {
 			await Promise.all([
-				refreshWalletAndStack(provider, walletRefreshRevision),
+				refreshWalletAndStack(requestProvider, walletRefreshRevision),
 				loadedStack === undefined ? Promise.resolve() : refreshSafeInformation(loadedStack, refreshRevision),
 			])
 		} catch (providerError) {
@@ -195,7 +203,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 		transactionActionErrors.value = []
 		try {
 			error.value = undefined
-			const provider = await getProvider()
+			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
 			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
 			if (walletIdentity === undefined) return
 			verifiedSafeStates.value = []
@@ -262,7 +270,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 				return
 			}
 			status.value = 'Verifying transactions against current on-chain state…'
-			const verifiedStates = await verifyLoadedStack(await getProvider(), parsed)
+			const verifiedStates = await verifyLoadedStack(withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs), parsed)
 			if (!isCurrentStackOperation(stackRevision.peek(), importRevision, stackExport.peek(), parsed)) return
 			verifiedSafeStates.value = verifiedStates
 			stackVerified.value = true
@@ -354,6 +362,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 		signedStackJson,
 		submittedExecutions,
 		transactionActionErrors,
+		walletRequestTimeoutMs,
 	})
 
 	const busy = pendingAction.value !== undefined
@@ -384,6 +393,7 @@ export function App({ browserStorage = getBrowserStorage() }: { readonly browser
 		walletChainId.value,
 		connectedSafeWalletSigners.value,
 		verifiedSafeStates.value,
+		walletRequestTimeoutMs,
 	)
 
 	return <main class = 'shell' aria-busy = { busy || loadingApplicationData }>
