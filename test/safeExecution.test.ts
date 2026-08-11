@@ -3,7 +3,7 @@ import { describe, test } from 'bun:test'
 import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { addressString, bytesFromHex, bytesToHex, ensureHex } from '../src/app/ethereum.js'
 import { createSafeTx } from '../src/app/safeProtocol.js'
-import { encodeSafeExecutionCall, readSafeExecutionGasFunding, submitSafeExecution } from '../src/app/safeExecution.js'
+import { encodeSafeExecutionCall, readSafeExecutionGasFunding, submitSafeExecution, waitForSafeExecutionReceipt } from '../src/app/safeExecution.js'
 import type { ProviderRequest } from '../src/app/safeStackValidation.js'
 
 const SAFE_EXECUTION_ABI = [{
@@ -178,5 +178,20 @@ describe('Safe execution', () => {
 			}),
 			/invalid execution transaction hash/u,
 		)
+	})
+
+	test('waits for a submitted execution transaction to be included', async () => {
+		const transactionHash = ensureHex(`0x${ 'ab'.repeat(32) }`, 'transaction hash')
+		let receiptReads = 0
+		const receipt = await waitForSafeExecutionReceipt({
+			async request(request) {
+				assert.equal(request.method, 'eth_getTransactionReceipt')
+				receiptReads += 1
+				return receiptReads === 1 ? null : { status: '0x1', blockNumber: '0x123' }
+			},
+		}, transactionHash, () => true, 0)
+
+		assert.deepEqual(receipt, { succeeded: true, blockNumber: 0x123n })
+		assert.equal(receiptReads, 2)
 	})
 })

@@ -11,6 +11,7 @@ const TRANSACTION_HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/u
 const EXEC_TRANSACTION_HEAD_BYTES = 10 * ABI_WORD_BYTES
 const ETHEREUM_QUANTITY_PATTERN = /^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/u
 const DEFAULT_PRIORITY_FEE_PER_GAS = 100_000_000n
+const EXECUTION_RECEIPT_POLL_INTERVAL_MS = 1_000
 
 function prevalidatedSafeSignature(signer: bigint) {
 	return `${ signer.toString(16).padStart(64, '0') }${ '0'.repeat(64) }01`
@@ -117,4 +118,43 @@ export async function submitSafeExecution(
 	}))
 	if (!TRANSACTION_HASH_PATTERN.test(result)) throw new Error('The wallet returned an invalid execution transaction hash.')
 	return ensureHex(result, 'Safe execution transaction hash')
+}
+
+export type SafeExecutionReceipt = {
+	readonly succeeded: boolean
+	readonly blockNumber: bigint
+}
+
+function parseSafeExecutionReceipt(value: unknown): SafeExecutionReceipt | undefined {
+	if (value === null) return undefined
+	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) return undefined
+	const blockNumberValue = value.blockNumber
+	if (blockNumberValue === null || blockNumberValue === undefined) return undefined
+	const blockNumber = parseEthereumQuantity(blockNumberValue, 'Execution receipt block number')
+	const status = 'status' in value && value.status !== undefined && value.status !== null
+		? parseEthereumQuantity(value.status, 'Execution receipt status')
+		: 1n
+	return { succeeded: status !== 0n, blockNumber }
+}
+
+export async function waitForSafeExecutionReceipt(
+	provider: InjectedProvider,
+	transactionHash: Hex,
+	isCurrent: () => boolean,
+	pollIntervalMs = EXECUTION_RECEIPT_POLL_INTERVAL_MS,
+): Promise<SafeExecutionReceipt | undefined> {
+	while (isCurrent()) {
+		try {
+			const receipt = parseSafeExecutionReceipt(await provider.request({
+				method: 'eth_getTransactionReceipt',
+				params: [transactionHash],
+			}))
+			if (receipt !== undefined) return receipt
+		} catch {
+			// A temporary provider failure should not make a submitted transaction executable again.
+		}
+		if (!isCurrent()) return undefined
+		await new Promise<void>((resolve) => globalThis.setTimeout(resolve, pollIntervalMs))
+	}
+	return undefined
 }

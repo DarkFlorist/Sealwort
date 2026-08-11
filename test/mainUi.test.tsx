@@ -57,7 +57,7 @@ function renderStack(overrides: Partial<Parameters<typeof SafeStackPanel>[0]> = 
 		executionGasChecks: [{ safeTxHash, status: 'complete', disabledReason: undefined }],
 		pendingAction: undefined,
 		busy: false,
-		submittedExecutionHashes: [],
+		submittedExecutions: [],
 		transactionActionErrors: [],
 		onSign: (transactionIndex, execute) => { onSignCalls.push({ transactionIndex, execute }) },
 		onExecute: (transactionIndex) => { onExecuteCalls.push(transactionIndex) },
@@ -154,6 +154,22 @@ describe('Sealwort rendered UI', () => {
 		})
 
 		assert.equal(screen.getByText('Review the transaction in your connected Safe wallet before approving it.') !== undefined, true)
+	})
+
+	test('keeps a connected Safe execution spinning while it awaits chain inclusion', () => {
+		renderStack({
+			account: safeAddress,
+			accountInformation: { kind: 'safe', address: safeAddress, chainId: 11155111n, state: verifiedState },
+			routedSigner: owner,
+			currentConnectedSafeBalances: { native: availableNativeAsset },
+			submittedExecutions: [{ safeTxHash, status: 'pending' }],
+		})
+
+		const waitingButton = screen.getByRole('button', { name: /Waiting for chain inclusion/u })
+		assert.equal(waitingButton.hasAttribute('disabled'), true)
+		assert.equal(waitingButton.getAttribute('aria-busy'), 'true')
+		assert.equal(waitingButton.querySelector('svg.spinner') !== null, true)
+		assert.equal(screen.queryByRole('button', { name: 'Execute through connected Safe wallet' }), null)
 	})
 
 	test('a threshold-ready transaction executes and displays action errors below its controls', () => {

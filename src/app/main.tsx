@@ -485,7 +485,7 @@ export function App({
 					executionGasChecks = { executionGasChecks.value }
 					pendingAction = { pendingAction.value }
 					busy = { busy }
-					submittedExecutionHashes = { submittedExecutions.value.map(({ safeTxHash }) => safeTxHash) }
+					submittedExecutions = { submittedExecutions.value }
 					transactionActionErrors = { transactionActionErrors.value }
 					onSign = { (transactionIndex, executeAfterSigning) => { void signTransaction(stackIndex, transactionIndex, executeAfterSigning) } }
 					onExecute = { (transactionIndex) => { void executeTransaction(stackIndex, transactionIndex) } }
