@@ -80,6 +80,36 @@ export function getExecutionGasFundingDisabledReason(funding: SafeExecutionGasFu
 	return `The active signer has ${ formatTokenBalance(funding.balance, 18) } ${ symbol }, but it needs up to ${ formatTokenBalance(funding.requiredBalance, 18) } ${ symbol } to cover the estimated Gnosis Safe execution gas.`
 }
 
+export function getVisibleExecutionFundingReason({
+	transactionActionError,
+	ready,
+	finalSignatureNeeded,
+	executionPrerequisiteDisabledReason,
+	signAndExecutePrerequisiteDisabledReason,
+	nativeTransferDisabledReason,
+	executionGasDisabledReason,
+	pendingExecutionGasCheckReason,
+}: {
+	readonly transactionActionError: string | undefined
+	readonly ready: boolean
+	readonly finalSignatureNeeded: boolean
+	readonly executionPrerequisiteDisabledReason: string | undefined
+	readonly signAndExecutePrerequisiteDisabledReason: string | undefined
+	readonly nativeTransferDisabledReason: string | undefined
+	readonly executionGasDisabledReason: string | undefined
+	readonly pendingExecutionGasCheckReason: string | undefined
+}) {
+	if (transactionActionError !== undefined) return undefined
+	if (ready) {
+		return executionPrerequisiteDisabledReason === undefined
+			? nativeTransferDisabledReason ?? executionGasDisabledReason
+			: undefined
+	}
+	return finalSignatureNeeded && signAndExecutePrerequisiteDisabledReason === undefined
+		? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason
+		: undefined
+}
+
 export function shouldInvalidateExecutionVerification(submissionAttempted: boolean, userRejected: boolean) {
 	return !submissionAttempted && !userRejected
 }

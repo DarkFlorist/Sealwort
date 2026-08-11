@@ -122,25 +122,27 @@ export function createTransactionActions({
 		provider: InjectedProvider,
 		safeTxHash: bigint,
 		transactionHash: Hex,
-		successPrefix = '',
+		isCurrentStack: () => boolean,
+		signatureStatus?: string,
 	) => {
 		const matchesPendingExecution = () => submittedExecutions.peek().some((execution) =>
 			execution.safeTxHash === safeTxHash
 			&& execution.transactionHash === transactionHash
 			&& execution.status === 'pending',
 		)
-		const receipt = await waitForSafeExecutionReceipt(provider, transactionHash, matchesPendingExecution)
-		if (receipt === undefined || !matchesPendingExecution()) return
+		const isCurrentPendingExecution = () => isCurrentStack() && matchesPendingExecution()
+		const receipt = await waitForSafeExecutionReceipt(provider, transactionHash, isCurrentPendingExecution)
+		if (receipt === undefined || !isCurrentPendingExecution()) return
 		if (!receipt.succeeded) {
 			submittedExecutions.value = submittedExecutions.peek().filter((execution) => execution.safeTxHash !== safeTxHash)
 			setTransactionActionError(safeTxHash, `The execution transaction failed in block ${ receipt.blockNumber.toString() }.`)
-			status.value = undefined
+			status.value = signatureStatus
 			return
 		}
 		submittedExecutions.value = submittedExecutions.peek().map((execution) => execution.safeTxHash === safeTxHash
 			? { ...execution, status: 'confirmed' }
 			: execution)
-		status.value = `${ successPrefix }Gnosis Safe execution transaction included in block ${ receipt.blockNumber.toString() }: ${ transactionHash }`
+		status.value = `${ signatureStatus === undefined ? '' : `${ signatureStatus } ` }Gnosis Safe execution transaction included in block ${ receipt.blockNumber.toString() }: ${ transactionHash }`
 	}
 
 	const readExecutableSafeStates = async (
@@ -216,7 +218,12 @@ export function createTransactionActions({
 					recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash)
 					verifiedSafeStates.value = currentSafeStates
 					status.value = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
-					void monitorSubmittedExecution(provider, transaction.safeTxHash, executionResult.transactionHash)
+					void monitorSubmittedExecution(
+						provider,
+						transaction.safeTxHash,
+						executionResult.transactionHash,
+						() => isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport),
+					)
 				} else handleExecutionFailure(executionResult, transaction.safeTxHash)
 				return
 			}
@@ -277,7 +284,13 @@ export function createTransactionActions({
 					recordSubmittedExecution(updatedTransaction.safeTxHash, executionResult.transactionHash)
 					verifiedSafeStates.value = executionResult.preparation.executionSafeStates
 					status.value = `${ signatureStatus } Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
-					void monitorSubmittedExecution(provider, updatedTransaction.safeTxHash, executionResult.transactionHash, `${ signatureStatus } `)
+					void monitorSubmittedExecution(
+						provider,
+						updatedTransaction.safeTxHash,
+						executionResult.transactionHash,
+						() => isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), updatedExport),
+						signatureStatus,
+					)
 				} else handleExecutionFailure(executionResult, transaction.safeTxHash)
 			}
 		} catch (signError) {
@@ -340,7 +353,12 @@ export function createTransactionActions({
 			verifiedSafeStates.value = executionResult.preparation.currentSafeStates
 			stackVerified.value = true
 			status.value = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
-			void monitorSubmittedExecution(provider, transaction.safeTxHash, executionResult.transactionHash)
+			void monitorSubmittedExecution(
+				provider,
+				transaction.safeTxHash,
+				executionResult.transactionHash,
+				() => isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport),
+			)
 		} catch (executionError) {
 			if (!isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport)) return
 			status.value = undefined

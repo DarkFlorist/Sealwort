@@ -323,6 +323,27 @@ describe('Sealwort app wallet workflows', () => {
 		assert.equal(submissionIndex > signatureIndex, true)
 	})
 
+	test('preserves the added-signature status when the submitted execution reverts', async () => {
+		const harness = createProviderHarness({
+			threshold: 1n,
+			executionReceiptResult: { status: '0x0', blockNumber: '0x124' },
+		})
+		window.ethereum = harness.provider
+		window.localStorage.setItem(
+			PERSISTED_SAFE_STACK_STORAGE_KEY,
+			JSON.stringify(SafeStackExport.serialize(createStack(1n))),
+		)
+		render(<App />)
+
+		const executeButton = await screen.findByRole('button', { name: 'Sign and execute' }, { timeout: 3000 })
+		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
+		fireEvent.click(executeButton)
+
+		await screen.findByText('The execution transaction failed in block 292.')
+		await screen.findByText(`Signature from ${ checksummedAddress(ownerAddress) } added for Gnosis Safe nonce 3.`)
+		assert.match(window.localStorage.getItem(PERSISTED_SAFE_STACK_STORAGE_KEY) ?? '', /"signatures":\s*\[/u)
+	})
+
 	test('keeps a failed threshold-ready execution retryable', async () => {
 		const ownerSignature = signTyped(safeTxToTypedData(safeTx), ownerPrivateKey)
 		const harness = createProviderHarness({ threshold: 1n, rejectFirstExecution: true })
@@ -433,5 +454,36 @@ describe('Sealwort app wallet workflows', () => {
 
 		await screen.findByRole('button', { name: 'Execution included' })
 		await screen.findByText(/execution transaction included in block 292:/u)
+	})
+
+	test('ignores a pending receipt after a wallet refresh supersedes its stack operation', async () => {
+		const otherOwnerSignature = signTyped(safeTxToTypedData(safeTx), otherOwnerPrivateKey)
+		let includeExecution: (receipt: unknown) => void = () => undefined
+		const executionReceiptResult = new Promise<unknown>((resolve) => { includeExecution = resolve })
+		const harness = createProviderHarness({
+			accounts: [`0x${ safeAddress.toString(16).padStart(40, '0') }`],
+			activeSafeSigner: ownerAddress,
+			executionReceiptResult,
+		})
+		window.ethereum = harness.provider
+		window.localStorage.setItem(
+			PERSISTED_SAFE_STACK_STORAGE_KEY,
+			JSON.stringify(SafeStackExport.serialize(createStack(2n, [{ signer: otherOwnerAddress, signature: otherOwnerSignature }]))),
+		)
+		render(<App />)
+
+		const executeButton = await screen.findByRole('button', { name: 'Execute through connected Safe wallet' }, { timeout: 3000 })
+		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
+		fireEvent.click(executeButton)
+		await screen.findByRole('button', { name: /Waiting for chain inclusion/u })
+
+		harness.emitAccountsChanged()
+		await waitFor(() => assert.equal(screen.getByRole('button', { name: 'Execute through connected Safe wallet' }).hasAttribute('disabled'), false))
+		includeExecution({ status: '0x1', blockNumber: '0x124' })
+		await executionReceiptResult
+		await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
+
+		assert.equal(screen.queryByText(/execution transaction included in block/u), null)
+		assert.equal(screen.queryByRole('button', { name: 'Execution included' }), null)
 	})
 })

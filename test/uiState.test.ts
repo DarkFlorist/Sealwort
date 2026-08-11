@@ -3,7 +3,7 @@ import { describe, test } from 'bun:test'
 import { createSafeTx } from '../src/app/safeProtocol.js'
 import { submitSafeExecution } from '../src/app/safeExecution.js'
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
-import { getAutomaticStackVerificationAction, getExecutionDisabledReason, getExecutionGasFundingDisabledReason, getNativeTransferDisabledReason, getSafeStackTextAction, getSignatureDisabledReason, persistSafeStackText, PERSISTED_SAFE_STACK_STORAGE_KEY, readPersistedSafeStackText, resizeTextareaToContent, shouldInvalidateExecutionVerification } from '../src/app/uiState.js'
+import { getAutomaticStackVerificationAction, getExecutionDisabledReason, getExecutionGasFundingDisabledReason, getNativeTransferDisabledReason, getSafeStackTextAction, getSignatureDisabledReason, getVisibleExecutionFundingReason, persistSafeStackText, PERSISTED_SAFE_STACK_STORAGE_KEY, readPersistedSafeStackText, resizeTextareaToContent, shouldInvalidateExecutionVerification } from '../src/app/uiState.js'
 
 const availableSignature = {
 	connectedAccount: 1n,
@@ -94,6 +94,25 @@ describe('Sealwort UI state', () => {
 			maxFeePerGas: 20_000_000_000n,
 			requiredBalance: 2_000_000_000_000_000n,
 		}, 'SepoliaETH'), 'The active signer has 0.001 SepoliaETH, but it needs up to 0.002 SepoliaETH to cover the estimated Gnosis Safe execution gas.')
+	})
+
+	test('shows execution funding only after the relevant action prerequisites pass', () => {
+		const availableFunding = {
+			transactionActionError: undefined,
+			ready: false,
+			finalSignatureNeeded: true,
+			executionPrerequisiteDisabledReason: undefined,
+			signAndExecutePrerequisiteDisabledReason: undefined,
+			nativeTransferDisabledReason: undefined,
+			executionGasDisabledReason: undefined,
+			pendingExecutionGasCheckReason: 'Checking execution gas…',
+		} as const
+
+		assert.equal(getVisibleExecutionFundingReason(availableFunding), 'Checking execution gas…')
+		assert.equal(getVisibleExecutionFundingReason({ ...availableFunding, transactionActionError: 'Signing failed' }), undefined)
+		assert.equal(getVisibleExecutionFundingReason({ ...availableFunding, signAndExecutePrerequisiteDisabledReason: 'Stack mismatch' }), undefined)
+		assert.equal(getVisibleExecutionFundingReason({ ...availableFunding, ready: true, executionGasDisabledReason: 'Insufficient gas funds' }), 'Insufficient gas funds')
+		assert.equal(getVisibleExecutionFundingReason({ ...availableFunding, ready: true, executionPrerequisiteDisabledReason: 'Stack mismatch', executionGasDisabledReason: 'Insufficient gas funds' }), undefined)
 	})
 
 	test('restores the execution action after a wallet submission failure without discarding verification', async () => {

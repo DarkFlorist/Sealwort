@@ -137,6 +137,7 @@ export function App({
 		if (manual) pendingAction.value = action
 		applicationLoading.value = true
 		stackVerified.value = false
+		submittedExecutions.value = []
 		transactionActionErrors.value = []
 		const loadedStack = stackExport.peek()
 		stackVerificationLoading.value = loadedStack !== undefined
@@ -200,6 +201,7 @@ export function App({
 		pendingAction.value = action
 		stackVerified.value = false
 		stackVerificationLoading.value = stackExport.peek() !== undefined
+		submittedExecutions.value = []
 		transactionActionErrors.value = []
 		try {
 			error.value = undefined
