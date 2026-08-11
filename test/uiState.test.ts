@@ -31,7 +31,7 @@ describe('Sealwort UI state', () => {
 	test('explains each reason that adding a signature is disabled', () => {
 		assert.equal(getSignatureDisabledReason({ ...availableSignature, connectedAccount: undefined }), 'Connect a signer wallet before adding your signature.')
 		assert.equal(getSignatureDisabledReason({ ...availableSignature, walletChainId: 11155111n }), 'Switch the signer wallet to chain 1 before signing.')
-		assert.equal(getSignatureDisabledReason({ ...availableSignature, safeVerified: false }), 'Current Gnosis Safe information is unavailable.')
+		assert.equal(getSignatureDisabledReason({ ...availableSignature, safeVerified: false }), 'Sealwort could not verify this transaction against the current on-chain Gnosis Safe state.')
 		assert.equal(getSignatureDisabledReason({ ...availableSignature, transactionNonce: 6n }), 'This Gnosis Safe transaction nonce has already executed or expired.')
 		assert.equal(getSignatureDisabledReason({ ...availableSignature, connectedAccountCanSign: false }), 'The connected account is not an owner of this Gnosis Safe.')
 		assert.equal(getSignatureDisabledReason(availableSignature), undefined)

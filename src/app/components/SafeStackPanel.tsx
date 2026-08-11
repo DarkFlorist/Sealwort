@@ -132,11 +132,12 @@ export function SafeStackPanel({
 					})
 			const executionGasCheck = executionGasChecks.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)
 			const pendingExecutionGasCheckReason = executionGasCheck === undefined || executionGasCheck.status === 'loading' ? 'Checking the active signer’s balance and estimated execution gas…' : executionGasCheck.disabledReason
-			const signAndExecuteDisabledReason = signatureActionDisabledReason
+			const signAndExecutePrerequisiteDisabledReason = signatureActionDisabledReason
 				?? connectedSafeWalletExecutionUnavailableReason
 				?? (accountInformation?.kind === 'eoa' || connectedSafeWalletCanExecute ? undefined : 'Connect a Gnosis Safe EOA owner or a connected Safe wallet to sign and execute this transaction.')
 				?? (verifiedSafeState?.nonce === transaction.safeTx.message.nonce ? undefined : 'Execute earlier Gnosis Safe transactions before this nonce.')
 				?? duplicateSignerMessage
+			const signAndExecuteDisabledReason = signAndExecutePrerequisiteDisabledReason
 				?? nativeTransferDisabledReason
 				?? (finalSignatureNeeded ? pendingExecutionGasCheckReason : undefined)
 			const executionPrerequisiteDisabledReason = safeDataLoading ? 'Loading current Gnosis Safe information…' : connectedSafeWalletExecutionUnavailableReason ?? getExecutionDisabledReason({
@@ -159,7 +160,9 @@ export function SafeStackPanel({
 			const executionFundingReasonId = `execution-funding-reason-${ stackIndex }-${ transactionIndex }`
 			const visibleExecutionFundingReason = transactionActionError !== undefined
 				? undefined
-				: ready ? nativeTransferDisabledReason ?? executionGasDisabledReason : finalSignatureNeeded ? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason : undefined
+				: ready
+					? executionPrerequisiteDisabledReason === undefined ? nativeTransferDisabledReason ?? executionGasDisabledReason : undefined
+					: finalSignatureNeeded && signAndExecutePrerequisiteDisabledReason === undefined ? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason : undefined
 			const executionFundingCheckLoading = visibleExecutionFundingReason === pendingExecutionGasCheckReason && (executionGasCheck === undefined || executionGasCheck.status === 'loading')
 			const executionFundingLoading = executionFundingCheckLoading || visibleExecutionFundingReason === nativeTransferDisabledReason && nativeAssetLoading
 			const actionExplanation = ready

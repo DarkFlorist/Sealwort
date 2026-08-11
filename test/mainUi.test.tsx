@@ -193,6 +193,26 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.queryByText('Checking the active signer’s balance and estimated execution gas…'), null)
 	})
 
+	test('a stack-state mismatch keeps Safe information visible without starting a gas spinner', () => {
+		const currentState: VerifiedSafeState = { ...verifiedState, nonce: 4n }
+		renderStack({
+			account: safeAddress,
+			accountInformation: { kind: 'safe', address: safeAddress, chainId: 11155111n, state: currentState },
+			routedSigner: owner,
+			currentSafeInformation: { chainId: 11155111n, safeAddress, loading: false, nativeAssetLoading: false, state: currentState, nativeAsset: availableNativeAsset },
+			currentConnectedSafeBalances: { native: availableNativeAsset },
+			stackVerified: false,
+			verifiedSafeState: undefined,
+			executionGasChecks: [],
+		})
+
+		assert.equal(screen.getByText('4').previousElementSibling?.textContent, 'Nonce')
+		assert.notEqual(screen.getByText(/no pending transaction at current nonce 4/u), undefined)
+		assert.notEqual(screen.getByText('Sealwort could not verify this transaction against the current on-chain Gnosis Safe state.'), undefined)
+		assert.equal(screen.queryByText('Current Gnosis Safe information is unavailable.'), null)
+		assert.equal(screen.queryByText('Checking the active signer’s balance and estimated execution gas…'), null)
+	})
+
 	test('insufficient vault funds disable execution with an explanation', () => {
 		const stack = createStack([{ signer: owner, signature: '0xsignature' }])
 		renderStack({ stack, currentSafeInformation: { chainId: 11155111n, safeAddress, loading: false, nativeAssetLoading: false, state: verifiedState, nativeAsset: { symbol: 'SepoliaETH', balance: { status: 'available', value: 1n } } } })

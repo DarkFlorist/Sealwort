@@ -16,7 +16,7 @@ export function getSignatureDisabledReason(availability: SignatureAvailability) 
 	if (availability.walletChainId !== availability.safeChainId) {
 		return `Switch the signer wallet to chain ${ availability.safeChainId.toString() } before signing.`
 	}
-	if (!availability.safeVerified) return 'Current Gnosis Safe information is unavailable.'
+	if (!availability.safeVerified) return 'Sealwort could not verify this transaction against the current on-chain Gnosis Safe state.'
 	if (availability.safeNonce !== undefined && availability.transactionNonce < availability.safeNonce) {
 		return 'This Gnosis Safe transaction nonce has already executed or expired.'
 	}
