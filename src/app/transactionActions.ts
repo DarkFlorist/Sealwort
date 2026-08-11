@@ -3,10 +3,10 @@ import * as funtypes from 'funtypes'
 import type { ConnectedAccountInformation } from './accountInspection.js'
 import { getNativeAssetSymbol } from './accountBalances.js'
 import { CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE, type ConnectedSafeWalletSigner, type PendingAction, type SubmittedExecution, type TransactionActionError } from './appTypes.js'
-import { addressString, checksummedAddress, type Hex } from './ethereum.js'
+import { addressString, checksummedAddress } from './ethereum.js'
 import { type ExecutionAttemptResult, runExecutionAttempt } from './executionAttempt.js'
 import { normalizeSafeSignature, recoverSafeSignatureOwner, safeTxToTypedDataJson } from './safeProtocol.js'
-import { readSafeExecutionGasFunding, submitSafeExecution, waitForSafeExecutionReceipt } from './safeExecution.js'
+import { readSafeExecutionGasFunding, submitSafeExecution } from './safeExecution.js'
 import { SafeStackExport, type SafeStackTransaction } from './safeStackProtocol.js'
 import { assertProviderEoaOwner, assertReturnedSafeOwner, getFreshSigningAccount, getSafeSigningAccountMode, type InjectedProvider, type VerifiedSafeState, validateSafeStackAtCurrentNonce } from './safeStackValidation.js'
 import { isCurrentStackOperation } from './stackOperationState.js'
@@ -111,38 +111,16 @@ export function createTransactionActions({
 		setTransactionActionError(safeTxHash, getUserFacingErrorMessage(result.error))
 	}
 
-	const recordSubmittedExecution = (safeTxHash: bigint, transactionHash: string) => {
-		submittedExecutions.value = [
-			...submittedExecutions.peek().filter((execution) => execution.safeTxHash !== safeTxHash),
-			{ safeTxHash, transactionHash, status: 'pending' },
-		]
-	}
-
-	const monitorSubmittedExecution = async (
-		provider: InjectedProvider,
+	const recordSubmittedExecution = (
 		safeTxHash: bigint,
-		transactionHash: Hex,
-		isCurrentStack: () => boolean,
+		transactionHash: string,
+		submittedStatus: string,
 		signatureStatus?: string,
 	) => {
-		const matchesPendingExecution = () => submittedExecutions.peek().some((execution) =>
-			execution.safeTxHash === safeTxHash
-			&& execution.transactionHash === transactionHash
-			&& execution.status === 'pending',
-		)
-		const isCurrentPendingExecution = () => isCurrentStack() && matchesPendingExecution()
-		const receipt = await waitForSafeExecutionReceipt(provider, transactionHash, isCurrentPendingExecution)
-		if (receipt === undefined || !isCurrentPendingExecution()) return
-		if (!receipt.succeeded) {
-			submittedExecutions.value = submittedExecutions.peek().filter((execution) => execution.safeTxHash !== safeTxHash)
-			setTransactionActionError(safeTxHash, `The execution transaction failed in block ${ receipt.blockNumber.toString() }.`)
-			status.value = signatureStatus
-			return
-		}
-		submittedExecutions.value = submittedExecutions.peek().map((execution) => execution.safeTxHash === safeTxHash
-			? { ...execution, status: 'confirmed' }
-			: execution)
-		status.value = `${ signatureStatus === undefined ? '' : `${ signatureStatus } ` }Gnosis Safe execution transaction included in block ${ receipt.blockNumber.toString() }: ${ transactionHash }`
+		submittedExecutions.value = [
+			...submittedExecutions.peek().filter((execution) => execution.safeTxHash !== safeTxHash),
+			{ safeTxHash, transactionHash, status: 'pending', submittedStatus, ...(signatureStatus === undefined ? {} : { signatureStatus }) },
+		]
 	}
 
 	const readExecutableSafeStates = async (
@@ -215,15 +193,10 @@ export function createTransactionActions({
 				})
 				if (executionResult.status === 'submitted') {
 					connectedSafeWalletSigners.value = [{ safeAddress: stack.safeAddress, signer: executionResult.preparation.activeSigner }]
-					recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash)
+					const submittedStatus = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
+					recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash, submittedStatus)
 					verifiedSafeStates.value = currentSafeStates
-					status.value = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
-					void monitorSubmittedExecution(
-						provider,
-						transaction.safeTxHash,
-						executionResult.transactionHash,
-						() => isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport),
-					)
+					status.value = submittedStatus
 				} else handleExecutionFailure(executionResult, transaction.safeTxHash)
 				return
 			}
@@ -281,16 +254,10 @@ export function createTransactionActions({
 					submit: async ({ executionAccount }) => await submitSafeExecution(provider, executionAccount, stack.safeAddress, updatedTransaction),
 				})
 				if (executionResult.status === 'submitted') {
-					recordSubmittedExecution(updatedTransaction.safeTxHash, executionResult.transactionHash)
+					const submittedStatus = `${ signatureStatus } Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
+					recordSubmittedExecution(updatedTransaction.safeTxHash, executionResult.transactionHash, submittedStatus, signatureStatus)
 					verifiedSafeStates.value = executionResult.preparation.executionSafeStates
-					status.value = `${ signatureStatus } Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
-					void monitorSubmittedExecution(
-						provider,
-						updatedTransaction.safeTxHash,
-						executionResult.transactionHash,
-						() => isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), updatedExport),
-						signatureStatus,
-					)
+					status.value = submittedStatus
 				} else handleExecutionFailure(executionResult, transaction.safeTxHash)
 			}
 		} catch (signError) {
@@ -349,16 +316,11 @@ export function createTransactionActions({
 				return
 			}
 			account.value = executionResult.preparation.freshAccount
-			recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash)
+			const submittedStatus = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
+			recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash, submittedStatus)
 			verifiedSafeStates.value = executionResult.preparation.currentSafeStates
 			stackVerified.value = true
-			status.value = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
-			void monitorSubmittedExecution(
-				provider,
-				transaction.safeTxHash,
-				executionResult.transactionHash,
-				() => isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport),
-			)
+			status.value = submittedStatus
 		} catch (executionError) {
 			if (!isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport)) return
 			status.value = undefined

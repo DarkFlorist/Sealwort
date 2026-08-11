@@ -25,6 +25,7 @@ function ExecutionSubmissionLabel({ submission, fallback }: {
 }) {
 	if (submission?.status === 'pending') return <LoadingIndicator>Waiting for chain inclusion…</LoadingIndicator>
 	if (submission?.status === 'confirmed') return <>Execution included</>
+	if (submission?.status === 'unconfirmed') return <>Receipt confirmation unavailable</>
 	return <>{ fallback }</>
 }
 

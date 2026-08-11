@@ -16,6 +16,7 @@ import { useExecutionGasChecks } from './useExecutionGasChecks.js'
 import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
+import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -76,6 +77,7 @@ export function App({
 	const signedStackJson = useSignal<string | undefined>(undefined)
 	const submittedExecutions = useSignal<readonly SubmittedExecution[]>([])
 	const transactionActionErrors = useSignal<readonly TransactionActionError[]>([])
+	useSubmittedExecutionReceipts(submittedExecutions, transactionActionErrors, status, walletRequestTimeoutMs)
 	const persistStackText = (text: string) => {
 		persistenceWarning.value = persistSafeStackText(browserStorage, text) ? undefined : SAFE_STACK_PERSISTENCE_WARNING
 	}

@@ -11,7 +11,6 @@ const TRANSACTION_HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/u
 const EXEC_TRANSACTION_HEAD_BYTES = 10 * ABI_WORD_BYTES
 const ETHEREUM_QUANTITY_PATTERN = /^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/u
 const DEFAULT_PRIORITY_FEE_PER_GAS = 100_000_000n
-const EXECUTION_RECEIPT_POLL_INTERVAL_MS = 1_000
 
 function prevalidatedSafeSignature(signer: bigint) {
 	return `${ signer.toString(16).padStart(64, '0') }${ '0'.repeat(64) }01`
@@ -137,24 +136,12 @@ function parseSafeExecutionReceipt(value: unknown): SafeExecutionReceipt | undef
 	return { succeeded: status !== 0n, blockNumber }
 }
 
-export async function waitForSafeExecutionReceipt(
+export async function readSafeExecutionReceipt(
 	provider: InjectedProvider,
 	transactionHash: Hex,
-	isCurrent: () => boolean,
-	pollIntervalMs = EXECUTION_RECEIPT_POLL_INTERVAL_MS,
 ): Promise<SafeExecutionReceipt | undefined> {
-	while (isCurrent()) {
-		try {
-			const receipt = parseSafeExecutionReceipt(await provider.request({
-				method: 'eth_getTransactionReceipt',
-				params: [transactionHash],
-			}))
-			if (receipt !== undefined) return receipt
-		} catch {
-			// A temporary provider failure should not make a submitted transaction executable again.
-		}
-		if (!isCurrent()) return undefined
-		await new Promise<void>((resolve) => globalThis.setTimeout(resolve, pollIntervalMs))
-	}
-	return undefined
+	return parseSafeExecutionReceipt(await provider.request({
+		method: 'eth_getTransactionReceipt',
+		params: [transactionHash],
+	}))
 }

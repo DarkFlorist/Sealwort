@@ -12,7 +12,9 @@ export type ConnectedSafeWalletSigner = {
 export type SubmittedExecution = {
 	readonly safeTxHash: bigint
 	readonly transactionHash: string
-	readonly status: 'pending' | 'confirmed'
+	readonly status: 'pending' | 'confirmed' | 'unconfirmed'
+	readonly submittedStatus: string
+	readonly signatureStatus?: string
 }
 
 export type TransactionActionError = {
