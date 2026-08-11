@@ -162,7 +162,7 @@ describe('Sealwort rendered UI', () => {
 			accountInformation: { kind: 'safe', address: safeAddress, chainId: 11155111n, state: verifiedState },
 			routedSigner: owner,
 			currentConnectedSafeBalances: { native: availableNativeAsset },
-			submittedExecutions: [{ safeTxHash, transactionHash: `0x${ '1'.repeat(64) }`, status: 'pending', submittedStatus: 'Execution submitted' }],
+			submittedExecutions: [{ safeTxHash, transactionHash: `0x${ '1'.repeat(64) }`, status: 'pending' }],
 		})
 
 		const waitingButton = screen.getByRole('button', { name: /Waiting for chain inclusion/u })

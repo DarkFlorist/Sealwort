@@ -29,6 +29,17 @@ function ExecutionSubmissionLabel({ submission, fallback }: {
 	return <>{ fallback }</>
 }
 
+function ExecutionSubmissionDetails({ submission }: { readonly submission: SubmittedExecution | undefined }) {
+	if (submission === undefined) return <></>
+	if (submission.status === 'confirmed') {
+		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { submission.transactionHash }</p>
+	}
+	if (submission.status === 'pending') {
+		return <p class = 'meta'>Gnosis Safe execution transaction submitted: { submission.transactionHash }</p>
+	}
+	return <p class = 'meta'>Gnosis Safe execution transaction receipt confirmation unavailable: { submission.transactionHash }</p>
+}
+
 export function SafeStackPanel({
 	stack,
 	stackIndex,
@@ -213,6 +224,7 @@ export function SafeStackPanel({
 							{ pendingAction === signAndExecuteAction ? <LoadingIndicator>{ usingConnectedSafeWallet ? 'Confirm execution…' : 'Confirm signature and execution…' }</LoadingIndicator> : <ExecutionSubmissionLabel submission = { submittedExecution } fallback = { usingConnectedSafeWallet ? 'Execute through connected Safe wallet' : 'Sign and execute' }/> }
 						</button> : <></> }
 					</div>
+					<ExecutionSubmissionDetails submission = { submittedExecution }/>
 					{ visibleExecutionFundingReason === undefined ? <></> : <p class = 'transaction-action-disabled-reason' id = { executionFundingReasonId }>{ executionFundingLoading ? <LoadingIndicator>{ visibleExecutionFundingReason }</LoadingIndicator> : visibleExecutionFundingReason }</p> }
 					{ transactionActionError === undefined ? <></> : <p class = 'transaction-action-error' id = { actionErrorId } role = 'alert'>{ transactionActionError }</p> }
 					</div>

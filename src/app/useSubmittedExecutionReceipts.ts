@@ -3,6 +3,7 @@ import { useEffect } from 'preact/hooks'
 import type { SubmittedExecution, TransactionActionError } from './appTypes.js'
 import { ensureHex } from './ethereum.js'
 import { readSafeExecutionReceipt } from './safeExecution.js'
+import { confirmSubmittedExecution, isPendingExecution, markSubmittedExecutionUnconfirmed, removeSubmittedExecution, setTransactionActionError } from './transactionActionState.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 
@@ -35,7 +36,6 @@ function waitForNextReceiptPoll(signal: AbortSignal, delayMs: number) {
 export function useSubmittedExecutionReceipts(
 	submittedExecutions: Signal<readonly SubmittedExecution[]>,
 	transactionActionErrors: Signal<readonly TransactionActionError[]>,
-	status: Signal<string | undefined>,
 	walletRequestTimeoutMs?: number,
 	pollingOptions: ReceiptPollingOptions = {},
 ) {
@@ -51,17 +51,7 @@ export function useSubmittedExecutionReceipts(
 		const provider = withWalletRequestTimeout(injectedProvider, walletRequestTimeoutMs)
 		const controller = new AbortController()
 
-		const isStillPending = (expected: SubmittedExecution) => !controller.signal.aborted
-			&& submittedExecutions.peek().some((execution) => execution.safeTxHash === expected.safeTxHash
-				&& execution.transactionHash === expected.transactionHash
-				&& execution.status === 'pending')
-
-		const setActionError = (safeTxHash: bigint, message: string) => {
-			transactionActionErrors.value = [
-				...transactionActionErrors.peek().filter((entry) => entry.safeTxHash !== safeTxHash),
-				{ safeTxHash, message },
-			]
-		}
+		const isStillPending = (expected: SubmittedExecution) => !controller.signal.aborted && isPendingExecution(submittedExecutions, expected)
 
 		const monitor = async (execution: SubmittedExecution) => {
 			const startedAt = Date.now()
@@ -73,17 +63,11 @@ export function useSubmittedExecutionReceipts(
 					if (!isStillPending(execution)) return
 					if (receipt !== undefined) {
 						if (!receipt.succeeded) {
-							submittedExecutions.value = submittedExecutions.peek().filter((entry) => entry.safeTxHash !== execution.safeTxHash || entry.transactionHash !== execution.transactionHash)
-							setActionError(execution.safeTxHash, `The execution transaction failed in block ${ receipt.blockNumber.toString() }.`)
-							if (status.peek() === execution.submittedStatus) status.value = execution.signatureStatus
+							removeSubmittedExecution(submittedExecutions, execution)
+							setTransactionActionError(transactionActionErrors, execution.safeTxHash, `The execution transaction failed in block ${ receipt.blockNumber.toString() }.`)
 							return
 						}
-						submittedExecutions.value = submittedExecutions.peek().map((entry) => entry.safeTxHash === execution.safeTxHash && entry.transactionHash === execution.transactionHash
-							? { ...entry, status: 'confirmed' }
-							: entry)
-						if (status.peek() === execution.submittedStatus) {
-							status.value = `${ execution.signatureStatus === undefined ? '' : `${ execution.signatureStatus } ` }Gnosis Safe execution transaction included in block ${ receipt.blockNumber.toString() }: ${ execution.transactionHash }`
-						}
+						confirmSubmittedExecution(submittedExecutions, execution, receipt.blockNumber)
 						return
 					}
 					lastProviderError = undefined
@@ -94,15 +78,12 @@ export function useSubmittedExecutionReceipts(
 				pollDelayMs = Math.min(pollDelayMs * 2, maximumDelayMs)
 			}
 			if (!isStillPending(execution)) return
-			submittedExecutions.value = submittedExecutions.peek().map((entry) => entry.safeTxHash === execution.safeTxHash && entry.transactionHash === execution.transactionHash
-				? { ...entry, status: 'unconfirmed' }
-				: entry)
+			markSubmittedExecutionUnconfirmed(submittedExecutions, execution)
 			const providerDetail = lastProviderError === undefined ? '' : ` Last provider error: ${ getUserFacingErrorMessage(lastProviderError) }`
-			setActionError(execution.safeTxHash, `Sealwort stopped checking before this execution receipt was confirmed.${ providerDetail } Refresh to check its on-chain state before trying again.`)
-			if (status.peek() === execution.submittedStatus) status.value = execution.signatureStatus
+			setTransactionActionError(transactionActionErrors, execution.safeTxHash, `Sealwort stopped checking before this execution receipt was confirmed.${ providerDetail } Refresh to check its on-chain state before trying again.`)
 		}
 
 		void Promise.all(pendingExecutions.map(async (execution) => await monitor(execution)))
 		return () => { controller.abort() }
-	}, [currentExecutions, initialDelayMs, maximumDelayMs, pollingTimeoutMs, transactionActionErrors, status, submittedExecutions, walletRequestTimeoutMs])
+	}, [currentExecutions, initialDelayMs, maximumDelayMs, pollingTimeoutMs, transactionActionErrors, submittedExecutions, walletRequestTimeoutMs])
 }

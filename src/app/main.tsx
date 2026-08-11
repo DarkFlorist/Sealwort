@@ -77,7 +77,7 @@ export function App({
 	const signedStackJson = useSignal<string | undefined>(undefined)
 	const submittedExecutions = useSignal<readonly SubmittedExecution[]>([])
 	const transactionActionErrors = useSignal<readonly TransactionActionError[]>([])
-	useSubmittedExecutionReceipts(submittedExecutions, transactionActionErrors, status, walletRequestTimeoutMs)
+	useSubmittedExecutionReceipts(submittedExecutions, transactionActionErrors, walletRequestTimeoutMs)
 	const persistStackText = (text: string) => {
 		persistenceWarning.value = persistSafeStackText(browserStorage, text) ? undefined : SAFE_STACK_PERSISTENCE_WARNING
 	}
