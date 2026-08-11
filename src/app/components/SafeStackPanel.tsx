@@ -156,7 +156,9 @@ export function SafeStackPanel({
 			const transactionActionError = transactionActionErrors.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)?.message
 			const actionErrorId = `action-error-${ stackIndex }-${ transactionIndex }`
 			const executionFundingReasonId = `execution-funding-reason-${ stackIndex }-${ transactionIndex }`
-			const visibleExecutionFundingReason = ready ? nativeTransferDisabledReason ?? executionGasDisabledReason : finalSignatureNeeded ? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason : undefined
+			const visibleExecutionFundingReason = transactionActionError !== undefined
+				? undefined
+				: ready ? nativeTransferDisabledReason ?? executionGasDisabledReason : finalSignatureNeeded ? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason : undefined
 			const executionFundingCheckLoading = visibleExecutionFundingReason === pendingExecutionGasCheckReason && (executionGasCheck === undefined || executionGasCheck.status === 'loading')
 			const executionFundingLoading = executionFundingCheckLoading || visibleExecutionFundingReason === nativeTransferDisabledReason && nativeAssetLoading
 			const actionExplanation = ready

@@ -9,6 +9,10 @@ describe('user-facing errors', () => {
 		assert.equal(getUserFacingErrorMessage(new Error('MetaMask - RPC Error: User rejected the request.')), 'The wallet request was rejected.')
 		assert.equal(getUserFacingErrorMessage({ message: 'Switch networks in your wallet.' }), 'Switch networks in your wallet.')
 		assert.equal(getUserFacingErrorMessage({ data: { message: 'Provider unavailable.' } }), 'Provider unavailable.')
+		assert.equal(getUserFacingErrorMessage({
+			message: 'Failed to process message signing request. See Interceptor for error message',
+			data: { originalError: { message: 'The Safe signing route is unavailable.' } },
+		}), 'The Safe signing route is unavailable.')
 		assert.equal(getUserFacingErrorMessage({ reason: 'opaque' }), 'An unexpected error occurred. Try again or reload Sealwort.')
 	})
 
