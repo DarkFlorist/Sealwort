@@ -57,7 +57,7 @@ function renderStack(overrides: Partial<Parameters<typeof SafeStackPanel>[0]> = 
 		executionGasChecks: [{ safeTxHash, status: 'complete', disabledReason: undefined }],
 		pendingAction: undefined,
 		busy: false,
-		submittedExecutionHashes: [],
+		submittedExecutions: [],
 		transactionActionErrors: [],
 		onSign: (transactionIndex, execute) => { onSignCalls.push({ transactionIndex, execute }) },
 		onExecute: (transactionIndex) => { onExecuteCalls.push(transactionIndex) },
@@ -111,6 +111,18 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.getByRole('button', { name: 'Collapse stack input' }).getAttribute('aria-expanded'), 'true')
 	})
 
+	test('prettifies valid JSON pasted into the stack input', () => {
+		let value = ''
+		const { rerender } = render(<StackJsonInput textareaRef = { createRef() } value = { value } expanded = { false } disabled = { false } onValueChange = { (nextValue) => { value = nextValue } } onToggle = { () => undefined } onFileChange = { async () => undefined } />)
+		const input = screen.getByLabelText('Gnosis Safe Stack JSON')
+
+		fireEvent.paste(input, { clipboardData: { getData: () => '{"name":"stack","stacks":[]}' } })
+		rerender(<StackJsonInput textareaRef = { createRef() } value = { value } expanded = { false } disabled = { false } onValueChange = { (nextValue) => { value = nextValue } } onToggle = { () => undefined } onFileChange = { async () => undefined } />)
+
+		assert.equal(value, '{\n\t"name": "stack",\n\t"stacks": []\n}')
+		assert.equal((screen.getByLabelText('Gnosis Safe Stack JSON') as HTMLTextAreaElement).value, value)
+	})
+
 	test('updated stack uses the same disclosure behavior and sharing guidance', () => {
 		let expanded = false
 		const { rerender } = render(<UpdatedStackPanel textareaRef = { createRef() } value = '{"signed":true}' expanded = { expanded } onToggle = { () => { expanded = !expanded } } />)
@@ -144,6 +156,22 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.getByText('Review the transaction in your connected Safe wallet before approving it.') !== undefined, true)
 	})
 
+	test('keeps a connected Safe execution spinning while it awaits chain inclusion', () => {
+		renderStack({
+			account: safeAddress,
+			accountInformation: { kind: 'safe', address: safeAddress, chainId: 11155111n, state: verifiedState },
+			routedSigner: owner,
+			currentConnectedSafeBalances: { native: availableNativeAsset },
+			submittedExecutions: [{ safeTxHash, transactionHash: `0x${ '1'.repeat(64) }`, status: 'pending' }],
+		})
+
+		const waitingButton = screen.getByRole('button', { name: /Waiting for chain inclusion/u })
+		assert.equal(waitingButton.hasAttribute('disabled'), true)
+		assert.equal(waitingButton.getAttribute('aria-busy'), 'true')
+		assert.equal(waitingButton.querySelector('svg.spinner') !== null, true)
+		assert.equal(screen.queryByRole('button', { name: 'Execute through connected Safe wallet' }), null)
+	})
+
 	test('a threshold-ready transaction executes and displays action errors below its controls', () => {
 		const stack = createStack([{ signer: owner, signature: '0xsignature' }])
 		const { onExecuteCalls } = renderStack({ stack, transactionActionErrors: [{ safeTxHash, message: 'Wallet failed' }] })
@@ -153,6 +181,36 @@ describe('Sealwort rendered UI', () => {
 		const alert = screen.getByRole('alert')
 		assert.equal(alert.textContent, 'Wallet failed')
 		assert.equal(alert.closest('.transaction-action-control') !== null, true)
+	})
+
+	test('an action error replaces a still-loading execution funding check', () => {
+		renderStack({
+			executionGasChecks: [{ safeTxHash, status: 'loading' }],
+			transactionActionErrors: [{ safeTxHash, message: 'Signing failed' }],
+		})
+
+		assert.equal(screen.getByRole('alert').textContent, 'Signing failed')
+		assert.equal(screen.queryByText('Checking the active signer’s balance and estimated execution gas…'), null)
+	})
+
+	test('a stack-state mismatch keeps Safe information visible without starting a gas spinner', () => {
+		const currentState: VerifiedSafeState = { ...verifiedState, nonce: 4n }
+		renderStack({
+			account: safeAddress,
+			accountInformation: { kind: 'safe', address: safeAddress, chainId: 11155111n, state: currentState },
+			routedSigner: owner,
+			currentSafeInformation: { chainId: 11155111n, safeAddress, loading: false, nativeAssetLoading: false, state: currentState, nativeAsset: availableNativeAsset },
+			currentConnectedSafeBalances: { native: availableNativeAsset },
+			stackVerified: false,
+			verifiedSafeState: undefined,
+			executionGasChecks: [],
+		})
+
+		assert.equal(screen.getByText('4').previousElementSibling?.textContent, 'Nonce')
+		assert.notEqual(screen.getByText(/no pending transaction at current nonce 4/u), undefined)
+		assert.notEqual(screen.getByText('Sealwort could not verify this transaction against the current on-chain Gnosis Safe state.'), undefined)
+		assert.equal(screen.queryByText('Current Gnosis Safe information is unavailable.'), null)
+		assert.equal(screen.queryByText('Checking the active signer’s balance and estimated execution gas…'), null)
 	})
 
 	test('insufficient vault funds disable execution with an explanation', () => {

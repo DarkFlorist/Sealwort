@@ -10,6 +10,7 @@ import { readSafeExecutionGasFunding, submitSafeExecution } from './safeExecutio
 import { SafeStackExport, type SafeStackTransaction } from './safeStackProtocol.js'
 import { assertProviderEoaOwner, assertReturnedSafeOwner, getFreshSigningAccount, getSafeSigningAccountMode, type InjectedProvider, type VerifiedSafeState, validateSafeStackAtCurrentNonce } from './safeStackValidation.js'
 import { isCurrentStackOperation } from './stackOperationState.js'
+import { clearTransactionActionError, hasSubmittedExecution, recordSubmittedExecution, setTransactionActionError } from './transactionActionState.js'
 import { getExecutionGasFundingDisabledReason } from './uiState.js'
 import { getUserFacingErrorMessage, isUserRejectedError } from './userFacingErrors.js'
 import { getConnectedSafeWalletDuplicateSignerMessage, getConnectedSafeWalletSigner } from './walletCapabilities.js'
@@ -83,17 +84,6 @@ export function createTransactionActions({
 		if (pendingAction.peek() === action) pendingAction.value = undefined
 	}
 
-	const clearTransactionActionError = (safeTxHash: bigint) => {
-		transactionActionErrors.value = transactionActionErrors.peek().filter((entry) => entry.safeTxHash !== safeTxHash)
-	}
-
-	const setTransactionActionError = (safeTxHash: bigint, message: string) => {
-		transactionActionErrors.value = [
-			...transactionActionErrors.peek().filter((entry) => entry.safeTxHash !== safeTxHash),
-			{ safeTxHash, message },
-		]
-	}
-
 	const handleExecutionFailure = (
 		result: ExecutionAttemptResult<unknown>,
 		safeTxHash: bigint,
@@ -108,11 +98,7 @@ export function createTransactionActions({
 			status.value = undefined
 			error.value = undefined
 		}
-		setTransactionActionError(safeTxHash, getUserFacingErrorMessage(result.error))
-	}
-
-	const recordSubmittedExecution = (safeTxHash: bigint, transactionHash: string) => {
-		submittedExecutions.value = [...submittedExecutions.peek(), { safeTxHash, transactionHash }]
+		setTransactionActionError(transactionActionErrors, safeTxHash, getUserFacingErrorMessage(result.error))
 	}
 
 	const readExecutableSafeStates = async (
@@ -136,11 +122,11 @@ export function createTransactionActions({
 		if (currentExport === undefined || stack === undefined || transaction === undefined) return
 		const operationRevision = stackRevision.peek()
 		if (currentAccount === undefined) {
-			setTransactionActionError(transaction.safeTxHash, 'Connect the owner wallet before signing.')
+			setTransactionActionError(transactionActionErrors, transaction.safeTxHash, 'Connect the owner wallet before signing.')
 			return
 		}
 		if (!stackVerified.peek()) {
-			setTransactionActionError(transaction.safeTxHash, 'Verify this Gnosis Safe stack against the current wallet network before signing.')
+			setTransactionActionError(transactionActionErrors, transaction.safeTxHash, 'Verify this Gnosis Safe stack against the current wallet network before signing.')
 			return
 		}
 		const action = executeAfterSigning
@@ -148,7 +134,7 @@ export function createTransactionActions({
 			: `sign:${ stackIndex }:${ transactionIndex }` as const
 		try {
 			pendingAction.value = action
-			clearTransactionActionError(transaction.safeTxHash)
+			clearTransactionActionError(transactionActionErrors, transaction.safeTxHash)
 			error.value = undefined
 			const provider = await getProvider(walletRequestTimeoutMs)
 			const currentSafeStates = await validateSafeStackAtCurrentNonce(provider, currentExport)
@@ -185,9 +171,9 @@ export function createTransactionActions({
 				})
 				if (executionResult.status === 'submitted') {
 					connectedSafeWalletSigners.value = [{ safeAddress: stack.safeAddress, signer: executionResult.preparation.activeSigner }]
-					recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash)
+					recordSubmittedExecution(submittedExecutions, transaction.safeTxHash, executionResult.transactionHash)
 					verifiedSafeStates.value = currentSafeStates
-					status.value = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
+					status.value = undefined
 				} else handleExecutionFailure(executionResult, transaction.safeTxHash)
 				return
 			}
@@ -245,9 +231,9 @@ export function createTransactionActions({
 					submit: async ({ executionAccount }) => await submitSafeExecution(provider, executionAccount, stack.safeAddress, updatedTransaction),
 				})
 				if (executionResult.status === 'submitted') {
-					recordSubmittedExecution(updatedTransaction.safeTxHash, executionResult.transactionHash)
+					recordSubmittedExecution(submittedExecutions, updatedTransaction.safeTxHash, executionResult.transactionHash)
 					verifiedSafeStates.value = executionResult.preparation.executionSafeStates
-					status.value = `${ signatureStatus } Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
+					status.value = signatureStatus
 				} else handleExecutionFailure(executionResult, transaction.safeTxHash)
 			}
 		} catch (signError) {
@@ -258,7 +244,7 @@ export function createTransactionActions({
 			}
 			status.value = undefined
 			error.value = undefined
-			setTransactionActionError(transaction.safeTxHash, getUserFacingErrorMessage(signError))
+			setTransactionActionError(transactionActionErrors, transaction.safeTxHash, getUserFacingErrorMessage(signError))
 		} finally {
 			if (stackRevision.peek() === operationRevision) finishPendingAction(action)
 		}
@@ -272,14 +258,14 @@ export function createTransactionActions({
 		if (currentExport === undefined || stack === undefined || transaction === undefined) return
 		const operationRevision = stackRevision.peek()
 		if (currentAccount === undefined) {
-			setTransactionActionError(transaction.safeTxHash, 'Connect an EOA wallet before executing this Gnosis Safe transaction.')
+			setTransactionActionError(transactionActionErrors, transaction.safeTxHash, 'Connect an EOA wallet before executing this Gnosis Safe transaction.')
 			return
 		}
-		if (submittedExecutions.peek().some(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)) return
+		if (hasSubmittedExecution(submittedExecutions, transaction.safeTxHash)) return
 		const action = `execute:${ stackIndex }:${ transactionIndex }` as const
 		try {
 			pendingAction.value = action
-			clearTransactionActionError(transaction.safeTxHash)
+			clearTransactionActionError(transactionActionErrors, transaction.safeTxHash)
 			error.value = undefined
 			const provider = await getProvider(walletRequestTimeoutMs)
 			const executionResult = await runExecutionAttempt({
@@ -306,15 +292,15 @@ export function createTransactionActions({
 				return
 			}
 			account.value = executionResult.preparation.freshAccount
-			recordSubmittedExecution(transaction.safeTxHash, executionResult.transactionHash)
+			recordSubmittedExecution(submittedExecutions, transaction.safeTxHash, executionResult.transactionHash)
 			verifiedSafeStates.value = executionResult.preparation.currentSafeStates
 			stackVerified.value = true
-			status.value = `Gnosis Safe execution transaction submitted: ${ executionResult.transactionHash }`
+			status.value = undefined
 		} catch (executionError) {
 			if (!isCurrentStackOperation(stackRevision.peek(), operationRevision, stackExport.peek(), currentExport)) return
 			status.value = undefined
 			error.value = undefined
-			setTransactionActionError(transaction.safeTxHash, getUserFacingErrorMessage(executionError))
+			setTransactionActionError(transactionActionErrors, transaction.safeTxHash, getUserFacingErrorMessage(executionError))
 		} finally {
 			if (stackRevision.peek() === operationRevision) finishPendingAction(action)
 		}

@@ -1,12 +1,12 @@
 import type { ConnectedAccountInformation } from '../accountInspection.js'
 import { getStackAccountCompatibility } from '../accountInspection.js'
 import { formatTokenBalance, getNativeAssetSymbol, getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../accountBalances.js'
-import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
+import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type SubmittedExecution, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
 import { checksummedAddress, dataStringWith0xStart } from '../ethereum.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'
-import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason } from '../uiState.js'
+import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason, getVisibleExecutionFundingReason } from '../uiState.js'
 import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilities.js'
 
 function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState, readonly source: string | undefined }) {
@@ -17,6 +17,27 @@ function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState
 		<dt>Threshold</dt><dd>{ state.threshold.toString() }/{ state.owners.length.toString() }</dd>
 		<dt>Owners</dt><dd class = 'owner-list'>{ state.owners.map((owner) => <code key = { owner.toString() }>{ checksummedAddress(owner) }</code>) }</dd>
 	</dl>
+}
+
+function ExecutionSubmissionLabel({ submission, fallback }: {
+	readonly submission: SubmittedExecution | undefined
+	readonly fallback: string
+}) {
+	if (submission?.status === 'pending') return <LoadingIndicator>Waiting for chain inclusion…</LoadingIndicator>
+	if (submission?.status === 'confirmed') return <>Execution included</>
+	if (submission?.status === 'unconfirmed') return <>Receipt confirmation unavailable</>
+	return <>{ fallback }</>
+}
+
+function ExecutionSubmissionDetails({ submission }: { readonly submission: SubmittedExecution | undefined }) {
+	if (submission === undefined) return <></>
+	if (submission.status === 'confirmed') {
+		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { submission.transactionHash }</p>
+	}
+	if (submission.status === 'pending') {
+		return <p class = 'meta'>Gnosis Safe execution transaction submitted: { submission.transactionHash }</p>
+	}
+	return <p class = 'meta'>Gnosis Safe execution transaction receipt confirmation unavailable: { submission.transactionHash }</p>
 }
 
 export function SafeStackPanel({
@@ -36,7 +57,7 @@ export function SafeStackPanel({
 	executionGasChecks,
 	pendingAction,
 	busy,
-	submittedExecutionHashes,
+	submittedExecutions,
 	transactionActionErrors,
 	onSign,
 	onExecute,
@@ -57,7 +78,7 @@ export function SafeStackPanel({
 	readonly executionGasChecks: readonly ExecutionGasCheck[]
 	readonly pendingAction: PendingAction | undefined
 	readonly busy: boolean
-	readonly submittedExecutionHashes: readonly bigint[]
+	readonly submittedExecutions: readonly SubmittedExecution[]
 	readonly transactionActionErrors: readonly TransactionActionError[]
 	readonly onSign: (transactionIndex: number, executeAfterSigning: boolean) => void
 	readonly onExecute: (transactionIndex: number) => void
@@ -95,7 +116,8 @@ export function SafeStackPanel({
 			const signAndExecuteAction = `sign-and-execute:${ stackIndex }:${ transactionIndex }` as const
 			const executeAction = `execute:${ stackIndex }:${ transactionIndex }` as const
 			const signedByCurrentRoute = hasSafeSignatureFromCurrentRoute(transaction.signatures.map(({ signer }) => signer), account, routedSigner)
-			const submittedExecution = submittedExecutionHashes.includes(transaction.safeTxHash)
+			const submittedExecution = submittedExecutions.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)
+			const executionPending = submittedExecution?.status === 'pending'
 			const connectedAccountCanSign = account !== undefined && (account === stack.safeAddress || verifiedSafeState?.owners.some((owner) => owner === account) === true)
 			const matchingConnectedSafeBalanceLoading = usingConnectedSafeWallet && (accountInformationLoading || connectedSafeBalancesLoading) && transactionNativeAsset?.balance.status !== 'available'
 			const safeDataLoading = stackVerificationLoading || currentSafeInformation === undefined || currentSafeInformation.loading
@@ -131,11 +153,12 @@ export function SafeStackPanel({
 					})
 			const executionGasCheck = executionGasChecks.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)
 			const pendingExecutionGasCheckReason = executionGasCheck === undefined || executionGasCheck.status === 'loading' ? 'Checking the active signer’s balance and estimated execution gas…' : executionGasCheck.disabledReason
-			const signAndExecuteDisabledReason = signatureActionDisabledReason
+			const signAndExecutePrerequisiteDisabledReason = signatureActionDisabledReason
 				?? connectedSafeWalletExecutionUnavailableReason
 				?? (accountInformation?.kind === 'eoa' || connectedSafeWalletCanExecute ? undefined : 'Connect a Gnosis Safe EOA owner or a connected Safe wallet to sign and execute this transaction.')
 				?? (verifiedSafeState?.nonce === transaction.safeTx.message.nonce ? undefined : 'Execute earlier Gnosis Safe transactions before this nonce.')
 				?? duplicateSignerMessage
+			const signAndExecuteDisabledReason = signAndExecutePrerequisiteDisabledReason
 				?? nativeTransferDisabledReason
 				?? (finalSignatureNeeded ? pendingExecutionGasCheckReason : undefined)
 			const executionPrerequisiteDisabledReason = safeDataLoading ? 'Loading current Gnosis Safe information…' : connectedSafeWalletExecutionUnavailableReason ?? getExecutionDisabledReason({
@@ -156,7 +179,16 @@ export function SafeStackPanel({
 			const transactionActionError = transactionActionErrors.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)?.message
 			const actionErrorId = `action-error-${ stackIndex }-${ transactionIndex }`
 			const executionFundingReasonId = `execution-funding-reason-${ stackIndex }-${ transactionIndex }`
-			const visibleExecutionFundingReason = ready ? nativeTransferDisabledReason ?? executionGasDisabledReason : finalSignatureNeeded ? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason : undefined
+			const visibleExecutionFundingReason = getVisibleExecutionFundingReason({
+				transactionActionError,
+				ready,
+				finalSignatureNeeded,
+				executionPrerequisiteDisabledReason,
+				signAndExecutePrerequisiteDisabledReason,
+				nativeTransferDisabledReason,
+				executionGasDisabledReason,
+				pendingExecutionGasCheckReason,
+			})
 			const executionFundingCheckLoading = visibleExecutionFundingReason === pendingExecutionGasCheckReason && (executionGasCheck === undefined || executionGasCheck.status === 'loading')
 			const executionFundingLoading = executionFundingCheckLoading || visibleExecutionFundingReason === nativeTransferDisabledReason && nativeAssetLoading
 			const actionExplanation = ready
@@ -185,13 +217,14 @@ export function SafeStackPanel({
 				<div class = 'transaction-actions'>
 					{ actionExplanation === undefined ? <></> : <p class = { actionDisabledReason === undefined ? 'muted' : 'signing-explanation' } id = { actionExplanationId }>{ safeDataLoading ? <LoadingIndicator>{ actionExplanation }</LoadingIndicator> : actionExplanation }</p> }
 					<div class = 'transaction-action-control'><div class = 'transaction-action-buttons'>
-						<button aria-busy = { pendingAction === executeAction || pendingAction === signAction } disabled = { busy || submittedExecution || actionDisabledReason !== undefined } aria-describedby = { ready ? executionDescription : actionDescription } title = { actionDisabledReason } onClick = { () => { ready ? onExecute(transactionIndex) : onSign(transactionIndex, false) } }>
-							{ ready ? pendingAction === executeAction ? <LoadingIndicator>Confirm execution…</LoadingIndicator> : submittedExecution ? 'Execution submitted' : 'Execute transaction' : pendingAction === signAction ? <LoadingIndicator>Waiting for wallet…</LoadingIndicator> : signedByCurrentRoute ? 'Already signed' : 'Add my signature' }
+						<button aria-busy = { pendingAction === executeAction || pendingAction === signAction || executionPending } disabled = { busy || submittedExecution !== undefined || actionDisabledReason !== undefined } aria-describedby = { ready ? executionDescription : actionDescription } title = { actionDisabledReason } onClick = { () => { ready ? onExecute(transactionIndex) : onSign(transactionIndex, false) } }>
+							{ ready ? pendingAction === executeAction ? <LoadingIndicator>Confirm execution…</LoadingIndicator> : <ExecutionSubmissionLabel submission = { submittedExecution } fallback = 'Execute transaction'/> : pendingAction === signAction ? <LoadingIndicator>Waiting for wallet…</LoadingIndicator> : signedByCurrentRoute ? 'Already signed' : 'Add my signature' }
 						</button>
-						{ finalSignatureNeeded ? <button aria-busy = { pendingAction === signAndExecuteAction } disabled = { busy || signAndExecuteDisabledReason !== undefined } aria-describedby = { executionDescription } title = { signAndExecuteDisabledReason } onClick = { () => { onSign(transactionIndex, true) } }>
-							{ pendingAction === signAndExecuteAction ? <LoadingIndicator>{ usingConnectedSafeWallet ? 'Confirm execution…' : 'Confirm signature and execution…' }</LoadingIndicator> : usingConnectedSafeWallet ? 'Execute through connected Safe wallet' : 'Sign and execute' }
+						{ finalSignatureNeeded ? <button aria-busy = { pendingAction === signAndExecuteAction || executionPending } disabled = { busy || submittedExecution !== undefined || signAndExecuteDisabledReason !== undefined } aria-describedby = { executionDescription } title = { signAndExecuteDisabledReason } onClick = { () => { onSign(transactionIndex, true) } }>
+							{ pendingAction === signAndExecuteAction ? <LoadingIndicator>{ usingConnectedSafeWallet ? 'Confirm execution…' : 'Confirm signature and execution…' }</LoadingIndicator> : <ExecutionSubmissionLabel submission = { submittedExecution } fallback = { usingConnectedSafeWallet ? 'Execute through connected Safe wallet' : 'Sign and execute' }/> }
 						</button> : <></> }
 					</div>
+					<ExecutionSubmissionDetails submission = { submittedExecution }/>
 					{ visibleExecutionFundingReason === undefined ? <></> : <p class = 'transaction-action-disabled-reason' id = { executionFundingReasonId }>{ executionFundingLoading ? <LoadingIndicator>{ visibleExecutionFundingReason }</LoadingIndicator> : visibleExecutionFundingReason }</p> }
 					{ transactionActionError === undefined ? <></> : <p class = 'transaction-action-error' id = { actionErrorId } role = 'alert'>{ transactionActionError }</p> }
 					</div>

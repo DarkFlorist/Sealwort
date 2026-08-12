@@ -118,3 +118,30 @@ export async function submitSafeExecution(
 	if (!TRANSACTION_HASH_PATTERN.test(result)) throw new Error('The wallet returned an invalid execution transaction hash.')
 	return ensureHex(result, 'Safe execution transaction hash')
 }
+
+export type SafeExecutionReceipt = {
+	readonly succeeded: boolean
+	readonly blockNumber: bigint
+}
+
+function parseSafeExecutionReceipt(value: unknown): SafeExecutionReceipt | undefined {
+	if (value === null) return undefined
+	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) return undefined
+	const blockNumberValue = value.blockNumber
+	if (blockNumberValue === null || blockNumberValue === undefined) return undefined
+	const blockNumber = parseEthereumQuantity(blockNumberValue, 'Execution receipt block number')
+	const status = 'status' in value && value.status !== undefined && value.status !== null
+		? parseEthereumQuantity(value.status, 'Execution receipt status')
+		: 1n
+	return { succeeded: status !== 0n, blockNumber }
+}
+
+export async function readSafeExecutionReceipt(
+	provider: InjectedProvider,
+	transactionHash: Hex,
+): Promise<SafeExecutionReceipt | undefined> {
+	return parseSafeExecutionReceipt(await provider.request({
+		method: 'eth_getTransactionReceipt',
+		params: [transactionHash],
+	}))
+}

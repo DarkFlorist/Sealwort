@@ -42,6 +42,21 @@ export function StackJsonInput({ textareaRef, value, expanded, disabled, onValue
 			placeholder = 'Paste an Interceptor Gnosis Safe Stack JSON export'
 			value = { value }
 			onInput = { (event) => { onValueChange(event.currentTarget.value) } }
+			onPaste = { (event) => {
+				const pastedText = event.clipboardData?.getData('text/plain')
+				if (pastedText === undefined) return
+				const input = event.currentTarget
+				const selectionStart = input.selectionStart
+				const selectionEnd = input.selectionEnd
+				const pastedValue = `${ value.slice(0, selectionStart) }${ pastedText }${ value.slice(selectionEnd) }`
+				try {
+					const parsed: unknown = JSON.parse(pastedValue)
+					event.preventDefault()
+					onValueChange(JSON.stringify(parsed, undefined, '\t'))
+				} catch {
+					// Leave non-JSON pastes to the browser so validation can report the problem.
+				}
+			} }
 			spellcheck = { false }
 		/>
 		<div class = 'toolbar'><label class = { `file-label${ disabled ? ' disabled' : '' }` }>

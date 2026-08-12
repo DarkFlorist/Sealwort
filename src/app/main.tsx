@@ -16,6 +16,7 @@ import { useExecutionGasChecks } from './useExecutionGasChecks.js'
 import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
+import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -76,6 +77,7 @@ export function App({
 	const signedStackJson = useSignal<string | undefined>(undefined)
 	const submittedExecutions = useSignal<readonly SubmittedExecution[]>([])
 	const transactionActionErrors = useSignal<readonly TransactionActionError[]>([])
+	useSubmittedExecutionReceipts(submittedExecutions, transactionActionErrors, walletRequestTimeoutMs)
 	const persistStackText = (text: string) => {
 		persistenceWarning.value = persistSafeStackText(browserStorage, text) ? undefined : SAFE_STACK_PERSISTENCE_WARNING
 	}
@@ -137,6 +139,7 @@ export function App({
 		if (manual) pendingAction.value = action
 		applicationLoading.value = true
 		stackVerified.value = false
+		submittedExecutions.value = []
 		transactionActionErrors.value = []
 		const loadedStack = stackExport.peek()
 		stackVerificationLoading.value = loadedStack !== undefined
@@ -200,6 +203,7 @@ export function App({
 		pendingAction.value = action
 		stackVerified.value = false
 		stackVerificationLoading.value = stackExport.peek() !== undefined
+		submittedExecutions.value = []
 		transactionActionErrors.value = []
 		try {
 			error.value = undefined
@@ -485,7 +489,7 @@ export function App({
 					executionGasChecks = { executionGasChecks.value }
 					pendingAction = { pendingAction.value }
 					busy = { busy }
-					submittedExecutionHashes = { submittedExecutions.value.map(({ safeTxHash }) => safeTxHash) }
+					submittedExecutions = { submittedExecutions.value }
 					transactionActionErrors = { transactionActionErrors.value }
 					onSign = { (transactionIndex, executeAfterSigning) => { void signTransaction(stackIndex, transactionIndex, executeAfterSigning) } }
 					onExecute = { (transactionIndex) => { void executeTransaction(stackIndex, transactionIndex) } }

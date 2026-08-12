@@ -16,7 +16,7 @@ export function getSignatureDisabledReason(availability: SignatureAvailability) 
 	if (availability.walletChainId !== availability.safeChainId) {
 		return `Switch the signer wallet to chain ${ availability.safeChainId.toString() } before signing.`
 	}
-	if (!availability.safeVerified) return 'Current Gnosis Safe information is unavailable.'
+	if (!availability.safeVerified) return 'Sealwort could not verify this transaction against the current on-chain Gnosis Safe state.'
 	if (availability.safeNonce !== undefined && availability.transactionNonce < availability.safeNonce) {
 		return 'This Gnosis Safe transaction nonce has already executed or expired.'
 	}
@@ -78,6 +78,36 @@ export function getNativeTransferDisabledReason(availability: NativeTransferAvai
 export function getExecutionGasFundingDisabledReason(funding: SafeExecutionGasFunding, symbol: string) {
 	if (funding.balance >= funding.requiredBalance) return undefined
 	return `The active signer has ${ formatTokenBalance(funding.balance, 18) } ${ symbol }, but it needs up to ${ formatTokenBalance(funding.requiredBalance, 18) } ${ symbol } to cover the estimated Gnosis Safe execution gas.`
+}
+
+export function getVisibleExecutionFundingReason({
+	transactionActionError,
+	ready,
+	finalSignatureNeeded,
+	executionPrerequisiteDisabledReason,
+	signAndExecutePrerequisiteDisabledReason,
+	nativeTransferDisabledReason,
+	executionGasDisabledReason,
+	pendingExecutionGasCheckReason,
+}: {
+	readonly transactionActionError: string | undefined
+	readonly ready: boolean
+	readonly finalSignatureNeeded: boolean
+	readonly executionPrerequisiteDisabledReason: string | undefined
+	readonly signAndExecutePrerequisiteDisabledReason: string | undefined
+	readonly nativeTransferDisabledReason: string | undefined
+	readonly executionGasDisabledReason: string | undefined
+	readonly pendingExecutionGasCheckReason: string | undefined
+}) {
+	if (transactionActionError !== undefined) return undefined
+	if (ready) {
+		return executionPrerequisiteDisabledReason === undefined
+			? nativeTransferDisabledReason ?? executionGasDisabledReason
+			: undefined
+	}
+	return finalSignatureNeeded && signAndExecutePrerequisiteDisabledReason === undefined
+		? nativeTransferDisabledReason ?? pendingExecutionGasCheckReason
+		: undefined
 }
 
 export function shouldInvalidateExecutionVerification(submissionAttempted: boolean, userRejected: boolean) {
