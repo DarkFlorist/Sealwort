@@ -30,7 +30,7 @@ jobs:
         run: |
           docker build \
             --build-arg SEALWORT_COMMIT_HASH="$GITHUB_SHA" \
-            --build-arg SEALWORT_RELEASE \
+            --build-arg SEALWORT_RELEASE="${SEALWORT_RELEASE:-}" \
             --file Dockerfile \
             --tag "$IMAGE_NAME" \
             .
