@@ -26,13 +26,7 @@ export function getBuildInformation(release: string | undefined, commitHash: str
 	}
 }
 
-export const BUILD_INFORMATION = getBuildInformation(
-	typeof SEALWORT_RELEASE === 'undefined' ? undefined : SEALWORT_RELEASE,
-	typeof SEALWORT_COMMIT_HASH === 'undefined' ? 'development' : SEALWORT_COMMIT_HASH,
-	typeof SEALWORT_REPOSITORY_URL === 'undefined' ? '' : SEALWORT_REPOSITORY_URL,
-)
-
-export function BuildInformationLink({ information = BUILD_INFORMATION }: { readonly information?: BuildInformation }) {
+export function BuildInformationLink({ information }: { readonly information: BuildInformation }) {
 	return <a href = { information.href } title = { information.fullIdentifier }>
 		{ information.kind === 'release' ? 'Release' : 'Commit' } { information.label }
 	</a>

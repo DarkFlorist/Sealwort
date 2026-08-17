@@ -1,6 +1,7 @@
 import { copyFile, mkdir, rm } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
+import { normalizeRepositoryUrl } from './buildMetadata.mjs'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
 const sourceDirectory = path.join(repositoryRoot, 'src')
@@ -15,24 +16,6 @@ function readGitValue(arguments_: readonly string[]) {
 	} catch {
 		return undefined
 	}
-}
-
-function normalizeRepositoryUrl(value: string) {
-	const trimmedValue = value.trim()
-	const sshMatch = /^git@([^:]+):(.+?)(?:\.git)?$/u.exec(trimmedValue)
-	const webValue = sshMatch === null ? trimmedValue : `https://${ sshMatch[1] }/${ sshMatch[2] }`
-	let repositoryUrl: URL
-	try {
-		repositoryUrl = new URL(webValue)
-	} catch {
-		throw new Error(`Build repository URL is invalid: ${ trimmedValue }`)
-	}
-	if (repositoryUrl.protocol !== 'https:' && repositoryUrl.protocol !== 'http:') {
-		throw new Error(`Build repository URL must use HTTP or HTTPS: ${ trimmedValue }`)
-	}
-	repositoryUrl.hash = ''
-	repositoryUrl.search = ''
-	return repositoryUrl.href.replace(/\.git$/u, '').replace(/\/$/u, '')
 }
 
 const packageMetadata: unknown = await Bun.file(path.join(repositoryRoot, 'package.json')).json()
@@ -66,11 +49,20 @@ const result = await Bun.build({
 	minify: true,
 	sourcemap: 'linked',
 	naming: 'main.js',
-	define: {
-		SEALWORT_RELEASE: JSON.stringify(release ?? ''),
-		SEALWORT_COMMIT_HASH: JSON.stringify(commitHash),
-		SEALWORT_REPOSITORY_URL: JSON.stringify(repositoryUrl),
-	},
+	plugins: [{
+		name: 'sealwort-build-metadata',
+		setup(builder) {
+			builder.onResolve({ filter: /^sealwort:build-metadata$/u }, () => ({ path: 'sealwort:build-metadata', namespace: 'sealwort-build-metadata' }))
+			builder.onLoad({ filter: /.*/u, namespace: 'sealwort-build-metadata' }, () => ({
+				contents: [
+					`export const release = ${ JSON.stringify(release ?? '') }`,
+					`export const commitHash = ${ JSON.stringify(commitHash) }`,
+					`export const repositoryUrl = ${ JSON.stringify(repositoryUrl) }`,
+				].join('\n'),
+				loader: 'js',
+			}))
+		},
+	}],
 })
 
 if (!result.success) {

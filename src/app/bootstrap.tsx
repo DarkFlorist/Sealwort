@@ -2,8 +2,11 @@ import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { useErrorBoundary } from 'preact/hooks'
 import { App } from './main.js'
+import { getBuildInformation } from './buildInformation.js'
+import { commitHash, release, repositoryUrl } from 'sealwort:build-metadata'
 
 const unexpectedFailure = signal(false)
+const buildInformation = getBuildInformation(release, commitHash, repositoryUrl)
 
 function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	return <main class = 'shell'>
@@ -25,7 +28,7 @@ function AppBoundary() {
 		console.error('Sealwort render failed.', caughtError)
 	})
 	if (renderError !== undefined || unexpectedFailure.value) return <FailureScreen />
-	return <App />
+	return <App buildInformation = { buildInformation } />
 }
 
 document.documentElement.classList.remove('sealwort-loading')
