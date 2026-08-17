@@ -5,23 +5,27 @@ export interface BuildInformation {
 	readonly kind: 'release' | 'commit'
 }
 
-export function getBuildInformation(release: string | undefined, commitHash: string, repositoryUrl: string): BuildInformation {
+export function getBuildInformation(release: string | undefined, commitHash: string | undefined, repositoryUrl: string | undefined): BuildInformation | undefined {
+	const normalizedRepositoryUrl = repositoryUrl?.trim()
+	if (normalizedRepositoryUrl === undefined || normalizedRepositoryUrl.length === 0) return undefined
+
 	const normalizedRelease = release?.trim()
 	if (normalizedRelease !== undefined && normalizedRelease.length > 0) {
 		return {
 			kind: 'release',
 			label: normalizedRelease,
 			fullIdentifier: normalizedRelease,
-			href: `${ repositoryUrl }/releases/tag/${ encodeURIComponent(normalizedRelease) }`,
+			href: `${ normalizedRepositoryUrl }/releases/tag/${ encodeURIComponent(normalizedRelease) }`,
 		}
 	}
 
-	const normalizedCommitHash = commitHash.trim()
+	const normalizedCommitHash = commitHash?.trim()
+	if (normalizedCommitHash === undefined || normalizedCommitHash.length === 0) return undefined
 	return {
 		kind: 'commit',
 		label: normalizedCommitHash.slice(0, 7),
 		fullIdentifier: normalizedCommitHash,
-		href: `${ repositoryUrl }/commit/${ encodeURIComponent(normalizedCommitHash) }`,
+		href: `${ normalizedRepositoryUrl }/commit/${ encodeURIComponent(normalizedCommitHash) }`,
 	}
 }
 

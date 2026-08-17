@@ -3,8 +3,8 @@ import path from 'node:path'
 
 export interface BuildMetadata {
 	readonly release: string | undefined
-	readonly commitHash: string
-	readonly repositoryUrl: string
+	readonly commitHash: string | undefined
+	readonly repositoryUrl: string | undefined
 }
 
 type BuildEnvironment = Readonly<Record<string, string | undefined>>
@@ -50,13 +50,13 @@ export function resolveBuildMetadata(environment: BuildEnvironment, readGitValue
 		|| readGitValue(['remote', 'get-url', 'origin'])
 		|| packageRepository
 
-	if (commitHash === undefined || commitHash.length === 0) {
-		throw new Error('Build commit information is unavailable. Set SEALWORT_COMMIT_HASH when building outside a Git checkout.')
+	return {
+		release,
+		commitHash,
+		repositoryUrl: repositoryUrlSource === undefined || repositoryUrlSource.length === 0
+			? undefined
+			: normalizeRepositoryUrl(repositoryUrlSource),
 	}
-	if (repositoryUrlSource === undefined || repositoryUrlSource.length === 0) {
-		throw new Error('Build repository information is unavailable. Set SEALWORT_REPOSITORY_URL when building outside a Git checkout.')
-	}
-	return { release, commitHash, repositoryUrl: normalizeRepositoryUrl(repositoryUrlSource) }
 }
 
 export async function readBuildMetadata(repositoryRoot: string, environment: BuildEnvironment = process.env) {

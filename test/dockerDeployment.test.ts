@@ -57,9 +57,9 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 
 	const dockerfile = await Bun.file(new URL('../Dockerfile', import.meta.url)).text()
 	assert.match(dockerfile, /^FROM oven\/bun:1\.3\.14-alpine@sha256:[0-9a-f]{64} AS builder$/mu)
-	assert.match(dockerfile, /^ARG SEALWORT_RELEASE$/mu)
-	assert.match(dockerfile, /^ARG SEALWORT_COMMIT_HASH$/mu)
-	assert.match(dockerfile, /^ARG SEALWORT_REPOSITORY_URL$/mu)
+	assert.match(dockerfile, /^ARG SEALWORT_RELEASE=""$/mu)
+	assert.match(dockerfile, /^ARG SEALWORT_COMMIT_HASH=""$/mu)
+	assert.match(dockerfile, /^ARG SEALWORT_REPOSITORY_URL=""$/mu)
 	assert.match(dockerfile, /ipfs add --cid-version 1 --quieter --only-hash --recursive \/export/u)
 	assert.match(dockerfile, /IPFS_API_MULTIADDR:-\/dns4\/host\.docker\.internal\/tcp\/5001/u)
 	assert.doesNotMatch(dockerfile, /getent ahostsv4/u)
@@ -86,6 +86,8 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	assert.match(checksWorkflow, /bun \.\/scripts\/build-docker\.mts sealwort-ci/u)
 
 	const buildScript = await Bun.file(new URL('../scripts/build.mts', import.meta.url)).text()
+	assert.match(buildScript, /entrypoints: \[path\.join\(sourceDirectory, 'app', 'entrypoint\.tsx'\)\]/u)
+	assert.doesNotMatch(buildScript, /bootstrapApplication|getBuildInformation|virtualEntrypoint/u)
 	assert.match(buildScript, /copyFile\(path\.join\(sourceDirectory, 'assets', 'sealwort-botanical\.svg'\), path\.join\(outputAssetsDirectory, 'sealwort-botanical\.svg'\)\)/u)
 
 	const [indexHtml, responseHeaders] = await Promise.all([

@@ -43,4 +43,12 @@ describe('build repository metadata', () => {
 
 		assert.deepEqual(metadata, { release: undefined, commitHash: 'github-commit', repositoryUrl: 'https://github.example/example/Sealwort' })
 	})
+
+	test('allows builds without source-control metadata', () => {
+		assert.deepEqual(resolveBuildMetadata({}, () => undefined, undefined), {
+			release: undefined,
+			commitHash: undefined,
+			repositoryUrl: undefined,
+		})
+	})
 })

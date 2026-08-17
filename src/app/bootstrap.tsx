@@ -21,15 +21,15 @@ function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	</main>
 }
 
-function AppBoundary({ buildInformation }: { readonly buildInformation: BuildInformation }) {
+function AppBoundary({ buildInformation }: { readonly buildInformation: BuildInformation | undefined }) {
 	const [renderError] = useErrorBoundary((caughtError) => {
 		console.error('Sealwort render failed.', caughtError)
 	})
 	if (renderError !== undefined || unexpectedFailure.value) return <FailureScreen />
-	return <App buildInformation = { buildInformation } />
+	return buildInformation === undefined ? <App /> : <App buildInformation = { buildInformation } />
 }
 
-export function bootstrapApplication(buildInformation: BuildInformation) {
+export function bootstrapApplication(buildInformation: BuildInformation | undefined) {
 	document.documentElement.classList.remove('sealwort-loading')
 
 	const app = document.querySelector('#app')

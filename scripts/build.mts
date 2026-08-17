@@ -8,7 +8,6 @@ const outputDirectory = path.join(sourceDirectory, 'dist')
 const outputJavascriptDirectory = path.join(outputDirectory, 'js')
 const outputStylesDirectory = path.join(outputDirectory, 'styles')
 const outputAssetsDirectory = path.join(outputDirectory, 'assets')
-const virtualEntrypoint = 'sealwort:entrypoint'
 
 const { release, commitHash, repositoryUrl } = await readBuildMetadata(repositoryRoot)
 
@@ -20,27 +19,18 @@ await Promise.all([
 ])
 
 const result = await Bun.build({
-	entrypoints: [virtualEntrypoint],
+	entrypoints: [path.join(sourceDirectory, 'app', 'entrypoint.tsx')],
 	outdir: outputJavascriptDirectory,
 	target: 'browser',
 	format: 'esm',
 	minify: true,
 	sourcemap: 'linked',
 	naming: 'main.js',
-	plugins: [{
-		name: 'sealwort-entrypoint',
-		setup(builder) {
-			builder.onResolve({ filter: /^sealwort:entrypoint$/u }, () => ({ path: virtualEntrypoint, namespace: 'sealwort-entrypoint' }))
-			builder.onLoad({ filter: /.*/u, namespace: 'sealwort-entrypoint' }, () => ({
-				contents: [
-					`import { bootstrapApplication } from ${ JSON.stringify(path.join(sourceDirectory, 'app', 'bootstrap.tsx')) }`,
-					`import { getBuildInformation } from ${ JSON.stringify(path.join(sourceDirectory, 'app', 'buildInformation.tsx')) }`,
-					`bootstrapApplication(getBuildInformation(${ JSON.stringify(release ?? '') }, ${ JSON.stringify(commitHash) }, ${ JSON.stringify(repositoryUrl) }))`,
-				].join('\n'),
-				loader: 'js',
-			}))
-		},
-	}],
+	define: {
+		SEALWORT_BUILD_RELEASE: JSON.stringify(release ?? ''),
+		SEALWORT_BUILD_COMMIT_HASH: JSON.stringify(commitHash ?? ''),
+		SEALWORT_BUILD_REPOSITORY_URL: JSON.stringify(repositoryUrl ?? ''),
+	},
 })
 
 if (!result.success) {
