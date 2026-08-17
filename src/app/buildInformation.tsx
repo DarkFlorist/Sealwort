@@ -6,14 +6,13 @@ export interface BuildInformation {
 }
 
 export function getBuildInformation(release: string | undefined, commitHash: string, repositoryUrl: string): BuildInformation {
-	const normalizedRepositoryUrl = repositoryUrl.replace(/\/$/u, '')
 	const normalizedRelease = release?.trim()
 	if (normalizedRelease !== undefined && normalizedRelease.length > 0) {
 		return {
 			kind: 'release',
 			label: normalizedRelease,
 			fullIdentifier: normalizedRelease,
-			href: `${ normalizedRepositoryUrl }/releases/tag/${ encodeURIComponent(normalizedRelease) }`,
+			href: `${ repositoryUrl }/releases/tag/${ encodeURIComponent(normalizedRelease) }`,
 		}
 	}
 
@@ -22,7 +21,7 @@ export function getBuildInformation(release: string | undefined, commitHash: str
 		kind: 'commit',
 		label: normalizedCommitHash.slice(0, 7),
 		fullIdentifier: normalizedCommitHash,
-		href: `${ normalizedRepositoryUrl }/commit/${ encodeURIComponent(normalizedCommitHash) }`,
+		href: `${ repositoryUrl }/commit/${ encodeURIComponent(normalizedCommitHash) }`,
 	}
 }
 

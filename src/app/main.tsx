@@ -18,7 +18,7 @@ import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
-import { BuildInformationLink, getBuildInformation, type BuildInformation } from './buildInformation.js'
+import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -38,12 +38,12 @@ function getBrowserStorage() {
 export function App({
 	browserStorage = getBrowserStorage(),
 	walletRequestTimeoutMs,
-	buildInformation = getBuildInformation(undefined, 'development', ''),
+	buildInformation,
 }: {
 	readonly browserStorage?: SafeStackStorage
 	readonly walletRequestTimeoutMs?: number
-	readonly buildInformation?: BuildInformation
-} = {}) {
+	readonly buildInformation: BuildInformation
+}) {
 	const stackExport = useSignal<SafeStackExport | undefined>(undefined)
 	const stackVerified = useSignal(false)
 	const verifiedSafeStates = useSignal<readonly VerifiedSafeState[]>([])

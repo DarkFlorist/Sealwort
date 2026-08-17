@@ -6,6 +6,7 @@ import { App } from '../src/app/main.js'
 import { bytesToHex, checksummedAddress, encodeSafeReadCall } from '../src/app/ethereum.js'
 import { createSafeTx, encodeSafeTransactionHashCall, getSafeTxHash, safeTxToTypedData } from '../src/app/safeProtocol.js'
 import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction } from '../src/app/safeStackProtocol.js'
+import { getBuildInformation } from '../src/app/buildInformation.js'
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { PERSISTED_SAFE_STACK_STORAGE_KEY, SAFE_STACK_PERSISTENCE_WARNING } from '../src/app/uiState.js'
 import { getWalletRequestTimeoutMessage } from '../src/app/walletProvider.js'
@@ -193,11 +194,17 @@ afterEach(() => {
 	delete window.ethereum
 })
 
+const testBuildInformation = getBuildInformation(undefined, 'development', 'https://github.test/DarkFlorist/Sealwort')
+
+function TestApp(props: Omit<Parameters<typeof App>[0], 'buildInformation'> = {}) {
+	return <App { ...props } buildInformation = { testBuildInformation } />
+}
+
 describe('Sealwort app wallet workflows', () => {
 	test('refreshes the rendered connected account when the provider advertises an account change', async () => {
 		const harness = createProviderHarness()
 		window.ethereum = harness.provider
-		render(<App />)
+		render(<TestApp />)
 
 		await screen.findByText(checksummedAddress(ownerAddress))
 		harness.setAccounts(['0x0000000000000000000000000000000000009876'])
@@ -209,7 +216,7 @@ describe('Sealwort app wallet workflows', () => {
 	test('does not restore stale wallet identity after an account-change refresh fails', async () => {
 		const harness = createProviderHarness()
 		window.ethereum = harness.provider
-		render(<App />)
+		render(<TestApp />)
 
 		const previousAccount = await screen.findByText(checksummedAddress(ownerAddress))
 		harness.failNextWalletIdentityRequest()
@@ -227,7 +234,7 @@ describe('Sealwort app wallet workflows', () => {
 			hangingMethod: 'eth_getCode',
 		})
 		window.ethereum = harness.provider
-		render(<App walletRequestTimeoutMs = { 5 } />)
+		render(<TestApp walletRequestTimeoutMs = { 5 } />)
 
 		await screen.findByText(`Sealwort could not inspect this account: ${ getWalletRequestTimeoutMessage('eth_getCode') }`)
 		assert.equal(screen.queryByText('Loading…'), null)
@@ -242,7 +249,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack())),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const signButton = await screen.findByRole('button', { name: 'Add my signature' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(signButton.hasAttribute('disabled'), false))
@@ -260,7 +267,7 @@ describe('Sealwort app wallet workflows', () => {
 		const harness = createProviderHarness()
 		const serializedStack = JSON.stringify(SafeStackExport.serialize(createStack()))
 		window.ethereum = harness.provider
-		render(<App browserStorage = { {
+		render(<TestApp browserStorage = { {
 			getItem: () => serializedStack,
 			setItem: () => { throw new Error('Storage blocked') },
 			removeItem: () => { throw new Error('Storage blocked') },
@@ -282,7 +289,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack())),
 		)
-		render(<App walletRequestTimeoutMs = { 5 } />)
+		render(<TestApp walletRequestTimeoutMs = { 5 } />)
 
 		const signButton = await screen.findByRole('button', { name: 'Add my signature' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(signButton.hasAttribute('disabled'), false))
@@ -296,7 +303,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack())),
 		)
-		render(<App walletRequestTimeoutMs = { 5 } />)
+		render(<TestApp walletRequestTimeoutMs = { 5 } />)
 
 		const signButton = await screen.findByRole('button', { name: 'Add my signature' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(signButton.hasAttribute('disabled'), false))
@@ -310,7 +317,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(1n))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Sign and execute' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -333,7 +340,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(1n))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Sign and execute' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -352,7 +359,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(1n, [{ signer: ownerAddress, signature: ownerSignature }]))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Execute transaction' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -376,7 +383,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(1n, [{ signer: ownerAddress, signature: ownerSignature }]))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Execute transaction' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -394,7 +401,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(1n, [{ signer: ownerAddress, signature: ownerSignature }]))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Execute transaction' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -416,7 +423,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(2n, [{ signer: otherOwnerAddress, signature: otherOwnerSignature }]))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Execute through connected Safe wallet' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -441,7 +448,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(2n, [{ signer: otherOwnerAddress, signature: otherOwnerSignature }]))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Execute through connected Safe wallet' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))
@@ -470,7 +477,7 @@ describe('Sealwort app wallet workflows', () => {
 			PERSISTED_SAFE_STACK_STORAGE_KEY,
 			JSON.stringify(SafeStackExport.serialize(createStack(2n, [{ signer: otherOwnerAddress, signature: otherOwnerSignature }]))),
 		)
-		render(<App />)
+		render(<TestApp />)
 
 		const executeButton = await screen.findByRole('button', { name: 'Execute through connected Safe wallet' }, { timeout: 3000 })
 		await waitFor(() => assert.equal(executeButton.hasAttribute('disabled'), false))

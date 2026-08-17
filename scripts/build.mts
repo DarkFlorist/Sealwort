@@ -9,6 +9,7 @@ const outputDirectory = path.join(sourceDirectory, 'dist')
 const outputJavascriptDirectory = path.join(outputDirectory, 'js')
 const outputStylesDirectory = path.join(outputDirectory, 'styles')
 const outputAssetsDirectory = path.join(outputDirectory, 'assets')
+const virtualEntrypoint = 'sealwort:entrypoint'
 
 function readGitValue(arguments_: readonly string[]) {
 	try {
@@ -42,7 +43,7 @@ await Promise.all([
 ])
 
 const result = await Bun.build({
-	entrypoints: [path.join(sourceDirectory, 'app', 'bootstrap.tsx')],
+	entrypoints: [virtualEntrypoint],
 	outdir: outputJavascriptDirectory,
 	target: 'browser',
 	format: 'esm',
@@ -50,14 +51,14 @@ const result = await Bun.build({
 	sourcemap: 'linked',
 	naming: 'main.js',
 	plugins: [{
-		name: 'sealwort-build-metadata',
+		name: 'sealwort-entrypoint',
 		setup(builder) {
-			builder.onResolve({ filter: /^sealwort:build-metadata$/u }, () => ({ path: 'sealwort:build-metadata', namespace: 'sealwort-build-metadata' }))
-			builder.onLoad({ filter: /.*/u, namespace: 'sealwort-build-metadata' }, () => ({
+			builder.onResolve({ filter: /^sealwort:entrypoint$/u }, () => ({ path: virtualEntrypoint, namespace: 'sealwort-entrypoint' }))
+			builder.onLoad({ filter: /.*/u, namespace: 'sealwort-entrypoint' }, () => ({
 				contents: [
-					`export const release = ${ JSON.stringify(release ?? '') }`,
-					`export const commitHash = ${ JSON.stringify(commitHash) }`,
-					`export const repositoryUrl = ${ JSON.stringify(repositoryUrl) }`,
+					`import { bootstrapApplication } from ${ JSON.stringify(path.join(sourceDirectory, 'app', 'bootstrap.tsx')) }`,
+					`import { getBuildInformation } from ${ JSON.stringify(path.join(sourceDirectory, 'app', 'buildInformation.tsx')) }`,
+					`bootstrapApplication(getBuildInformation(${ JSON.stringify(release ?? '') }, ${ JSON.stringify(commitHash) }, ${ JSON.stringify(repositoryUrl) }))`,
 				].join('\n'),
 				loader: 'js',
 			}))

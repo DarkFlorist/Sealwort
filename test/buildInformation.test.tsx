@@ -15,7 +15,7 @@ describe('build information', () => {
 	})
 
 	test('falls back to a linked abbreviated commit hash', () => {
-		const information = getBuildInformation(undefined, '0123456789abcdef', 'https://github.example/fork/Sealwort/')
+		const information = getBuildInformation(undefined, '0123456789abcdef', 'https://github.example/fork/Sealwort')
 		render(<BuildInformationLink information = { information } />)
 
 		const link = screen.getByRole('link', { name: 'Commit 0123456' })
