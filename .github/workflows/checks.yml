@@ -19,4 +19,4 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - name: Verify deployment image builds
-        run: docker build --build-arg SEALWORT_COMMIT_HASH="$GITHUB_SHA" --build-arg SEALWORT_REPOSITORY_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --file Dockerfile --tag sealwort-ci .
+        run: ./scripts/build-docker.sh sealwort-ci
