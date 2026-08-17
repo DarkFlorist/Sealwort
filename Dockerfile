@@ -1,5 +1,10 @@
 FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS builder
 
+ARG SEALWORT_RELEASE
+ARG SEALWORT_COMMIT_HASH
+ENV SEALWORT_RELEASE=$SEALWORT_RELEASE
+ENV SEALWORT_COMMIT_HASH=$SEALWORT_COMMIT_HASH
+
 WORKDIR /source
 COPY package.json bun.lock tsconfig.json ./
 RUN bun install --frozen-lockfile

@@ -18,6 +18,7 @@ import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
+import { BuildInformationLink } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -504,7 +505,7 @@ export function App({
 		}
 		<footer class = 'site-footer'>
 			<p>
-				Sealwort by <a href = 'https://dark.florist/'>Dark Florist</a>
+				Sealwort by <a href = 'https://dark.florist/'>Dark Florist</a> · <BuildInformationLink />
 			</p>
 			<nav aria-label = 'Dark Florist social links'>
 				{ DARK_FLORIST_SOCIAL_LINKS.map((socialLink) =>

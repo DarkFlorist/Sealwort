@@ -1,0 +1,79 @@
+name: Build IPFS Release Artifact
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set image coordinates
+        run: |
+          echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "SEALWORT_RELEASE=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg SEALWORT_COMMIT_HASH="$GITHUB_SHA" \
+            --build-arg SEALWORT_RELEASE \
+            --file Dockerfile \
+            --tag "$IMAGE_NAME" \
+            .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        run: |
+          IMAGE_RELEASE_ID="$REGISTRY/$IMAGE_NAME:$VERSION"
+          docker tag "$IMAGE_NAME" "$IMAGE_RELEASE_ID"
+          docker push "$IMAGE_RELEASE_ID"
+          echo "IMAGE_RELEASE_ID=$IMAGE_RELEASE_ID" >> "$GITHUB_ENV"
+
+      - name: Build host-neutral IPFS artifact
+        if: github.ref_type == 'tag'
+        run: |
+          mkdir -p /tmp/sealwort-ipfs
+          docker run --rm --entrypoint /bin/sh --volume /tmp/sealwort-ipfs:/output "$IMAGE_RELEASE_ID" -c '
+            set -eu
+            BUILD_CID=$(cat /ipfs_hash.txt)
+            IPFS_HASH=$(ipfs add --cid-version 1 --quieter --recursive /export)
+            if [ "$IPFS_HASH" != "$BUILD_CID" ]; then
+              echo "IPFS CID mismatch: image contains $BUILD_CID but CAR was built from $IPFS_HASH" >&2
+              exit 1
+            fi
+            ipfs dag export "$IPFS_HASH" > /output/sealwort.car
+            printf "%s\n" "$IPFS_HASH" > /output/ipfs-cid.txt
+          '
+          echo "IPFS_HASH=$(cat /tmp/sealwort-ipfs/ipfs-cid.txt)" >> "$GITHUB_ENV"
+
+      - name: Create release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '#### IPFS CID\n\n`%s`\n\n[ipfs://%s](ipfs://%s)\n' "$IPFS_HASH" "$IPFS_HASH" "$IPFS_HASH" > /tmp/release-notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file /tmp/release-notes.md \
+            /tmp/sealwort-ipfs/sealwort.car \
+            /tmp/sealwort-ipfs/ipfs-cid.txt
