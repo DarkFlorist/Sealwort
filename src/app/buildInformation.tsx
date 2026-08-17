@@ -1,8 +1,5 @@
 const GITHUB_REPOSITORY_URL = 'https://github.com/DarkFlorist/Sealwort'
 
-declare const SEALWORT_RELEASE: string
-declare const SEALWORT_COMMIT_HASH: string
-
 export interface BuildInformation {
 	readonly label: string
 	readonly href: string
