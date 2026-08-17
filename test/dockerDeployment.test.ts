@@ -31,7 +31,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 		assert.match(dockerignore, new RegExp(`^${ excludedPath.replaceAll('.', '\\.').replaceAll('*', '.*') }$`, 'mu'))
 	}
 
-	const releaseWorkflow = await Bun.file(new URL('../workflow-changes/ipfs-deploy.yml', import.meta.url)).text()
+	const releaseWorkflow = await Bun.file(new URL('../.github/workflows/ipfs-deploy.yml', import.meta.url)).text()
 	assert.match(releaseWorkflow, /BUILD_CID=\$\(cat \/ipfs_hash\.txt\)/u)
 	assert.match(releaseWorkflow, /if \[ "\$IPFS_HASH" != "\$BUILD_CID" \]/u)
 	assert.match(releaseWorkflow, /printf "%s\\n" "\$IPFS_HASH" > \/output\/ipfs-cid\.txt/u)
@@ -39,7 +39,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	assert.match(releaseWorkflow, /SEALWORT_RELEASE=\$GITHUB_REF_NAME/u)
 	const reviewWorkflow = await Bun.file(new URL('../.github/workflows/review.yml', import.meta.url)).text()
 	assert.match(reviewWorkflow, /actions\/upload-artifact@[0-9a-f]{40}/u)
-	const checksWorkflow = await Bun.file(new URL('../workflow-changes/checks.yml', import.meta.url)).text()
+	const checksWorkflow = await Bun.file(new URL('../.github/workflows/checks.yml', import.meta.url)).text()
 	assert.match(checksWorkflow, /oven-sh\/setup-bun@[0-9a-f]{40}/u)
 	assert.match(checksWorkflow, /docker build --build-arg SEALWORT_COMMIT_HASH="\$GITHUB_SHA" --file Dockerfile --tag sealwort-ci \./u)
 
