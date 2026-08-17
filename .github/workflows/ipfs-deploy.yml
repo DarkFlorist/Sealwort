@@ -31,6 +31,7 @@ jobs:
           docker build \
             --build-arg SEALWORT_COMMIT_HASH="$GITHUB_SHA" \
             --build-arg SEALWORT_RELEASE="${SEALWORT_RELEASE:-}" \
+            --build-arg SEALWORT_REPOSITORY_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --file Dockerfile \
             --tag "$IMAGE_NAME" \
             .
