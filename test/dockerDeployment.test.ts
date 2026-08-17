@@ -36,6 +36,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	assert.match(releaseWorkflow, /if \[ "\$IPFS_HASH" != "\$BUILD_CID" \]/u)
 	assert.match(releaseWorkflow, /printf "%s\\n" "\$IPFS_HASH" > \/output\/ipfs-cid\.txt/u)
 	assert.match(releaseWorkflow, /--build-arg SEALWORT_COMMIT_HASH="\$GITHUB_SHA"/u)
+	assert.match(releaseWorkflow, /--build-arg SEALWORT_RELEASE="\$\{SEALWORT_RELEASE:-\}"/u)
 	assert.match(releaseWorkflow, /SEALWORT_RELEASE=\$GITHUB_REF_NAME/u)
 	const reviewWorkflow = await Bun.file(new URL('../.github/workflows/review.yml', import.meta.url)).text()
 	assert.match(reviewWorkflow, /actions\/upload-artifact@[0-9a-f]{40}/u)
