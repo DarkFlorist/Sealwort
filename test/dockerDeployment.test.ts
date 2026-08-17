@@ -10,13 +10,14 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	if (typeof scripts !== 'object' || scripts === null || !('ui:docker' in scripts)) throw new Error('Missing ui:docker script')
 	assert.equal(
 		scripts['ui:docker'],
-		'SEALWORT_RELEASE="$(git describe --tags --exact-match 2>/dev/null || true)" SEALWORT_COMMIT_HASH="$(git rev-parse HEAD)" docker build --build-arg SEALWORT_RELEASE --build-arg SEALWORT_COMMIT_HASH --file Dockerfile --tag sealwort-ui . && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui',
+		'SEALWORT_RELEASE="$(git describe --tags --exact-match 2>/dev/null || true)" SEALWORT_COMMIT_HASH="$(git rev-parse HEAD)" SEALWORT_REPOSITORY_URL="$(git remote get-url origin)" docker build --build-arg SEALWORT_RELEASE --build-arg SEALWORT_COMMIT_HASH --build-arg SEALWORT_REPOSITORY_URL --file Dockerfile --tag sealwort-ui . && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui',
 	)
 
 	const dockerfile = await Bun.file(new URL('../Dockerfile', import.meta.url)).text()
 	assert.match(dockerfile, /^FROM oven\/bun:1\.3\.14-alpine@sha256:[0-9a-f]{64} AS builder$/mu)
 	assert.match(dockerfile, /^ARG SEALWORT_RELEASE$/mu)
 	assert.match(dockerfile, /^ARG SEALWORT_COMMIT_HASH$/mu)
+	assert.match(dockerfile, /^ARG SEALWORT_REPOSITORY_URL$/mu)
 	assert.match(dockerfile, /ipfs add --cid-version 1 --quieter --only-hash --recursive \/export/u)
 	assert.match(dockerfile, /IPFS_API_MULTIADDR:-\/dns4\/host\.docker\.internal\/tcp\/5001/u)
 	assert.doesNotMatch(dockerfile, /getent ahostsv4/u)

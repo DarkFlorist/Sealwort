@@ -1,5 +1,3 @@
-const GITHUB_REPOSITORY_URL = 'https://github.com/DarkFlorist/Sealwort'
-
 export interface BuildInformation {
 	readonly label: string
 	readonly href: string
@@ -7,14 +5,15 @@ export interface BuildInformation {
 	readonly kind: 'release' | 'commit'
 }
 
-export function getBuildInformation(release: string | undefined, commitHash: string): BuildInformation {
+export function getBuildInformation(release: string | undefined, commitHash: string, repositoryUrl: string): BuildInformation {
+	const normalizedRepositoryUrl = repositoryUrl.replace(/\/$/u, '')
 	const normalizedRelease = release?.trim()
 	if (normalizedRelease !== undefined && normalizedRelease.length > 0) {
 		return {
 			kind: 'release',
 			label: normalizedRelease,
 			fullIdentifier: normalizedRelease,
-			href: `${ GITHUB_REPOSITORY_URL }/releases/tag/${ encodeURIComponent(normalizedRelease) }`,
+			href: `${ normalizedRepositoryUrl }/releases/tag/${ encodeURIComponent(normalizedRelease) }`,
 		}
 	}
 
@@ -23,13 +22,14 @@ export function getBuildInformation(release: string | undefined, commitHash: str
 		kind: 'commit',
 		label: normalizedCommitHash.slice(0, 7),
 		fullIdentifier: normalizedCommitHash,
-		href: `${ GITHUB_REPOSITORY_URL }/commit/${ encodeURIComponent(normalizedCommitHash) }`,
+		href: `${ normalizedRepositoryUrl }/commit/${ encodeURIComponent(normalizedCommitHash) }`,
 	}
 }
 
 export const BUILD_INFORMATION = getBuildInformation(
 	typeof SEALWORT_RELEASE === 'undefined' ? undefined : SEALWORT_RELEASE,
 	typeof SEALWORT_COMMIT_HASH === 'undefined' ? 'development' : SEALWORT_COMMIT_HASH,
+	typeof SEALWORT_REPOSITORY_URL === 'undefined' ? '' : SEALWORT_REPOSITORY_URL,
 )
 
 export function BuildInformationLink({ information = BUILD_INFORMATION }: { readonly information?: BuildInformation }) {

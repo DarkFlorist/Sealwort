@@ -17,11 +17,39 @@ function readGitValue(arguments_: readonly string[]) {
 	}
 }
 
+function normalizeRepositoryUrl(value: string) {
+	const trimmedValue = value.trim()
+	const sshMatch = /^git@([^:]+):(.+?)(?:\.git)?$/u.exec(trimmedValue)
+	const webValue = sshMatch === null ? trimmedValue : `https://${ sshMatch[1] }/${ sshMatch[2] }`
+	let repositoryUrl: URL
+	try {
+		repositoryUrl = new URL(webValue)
+	} catch {
+		throw new Error(`Build repository URL is invalid: ${ trimmedValue }`)
+	}
+	if (repositoryUrl.protocol !== 'https:' && repositoryUrl.protocol !== 'http:') {
+		throw new Error(`Build repository URL must use HTTP or HTTPS: ${ trimmedValue }`)
+	}
+	repositoryUrl.hash = ''
+	repositoryUrl.search = ''
+	return repositoryUrl.href.replace(/\.git$/u, '').replace(/\/$/u, '')
+}
+
+const packageMetadata: unknown = await Bun.file(path.join(repositoryRoot, 'package.json')).json()
+const packageRepository = typeof packageMetadata === 'object' && packageMetadata !== null && 'repository' in packageMetadata && typeof packageMetadata.repository === 'string'
+	? packageMetadata.repository
+	: undefined
+
 const release = process.env.SEALWORT_RELEASE?.trim() || readGitValue(['describe', '--tags', '--exact-match'])
 const commitHash = process.env.SEALWORT_COMMIT_HASH?.trim() || process.env.GITHUB_SHA?.trim() || readGitValue(['rev-parse', 'HEAD'])
+const repositoryUrlSource = process.env.SEALWORT_REPOSITORY_URL?.trim() || readGitValue(['remote', 'get-url', 'origin']) || packageRepository
 if (commitHash === undefined || commitHash.length === 0) {
 	throw new Error('Build commit information is unavailable. Set SEALWORT_COMMIT_HASH when building outside a Git checkout.')
 }
+if (repositoryUrlSource === undefined || repositoryUrlSource.length === 0) {
+	throw new Error('Build repository information is unavailable. Set SEALWORT_REPOSITORY_URL when building outside a Git checkout.')
+}
+const repositoryUrl = normalizeRepositoryUrl(repositoryUrlSource)
 
 await rm(outputDirectory, { recursive: true, force: true })
 await Promise.all([
@@ -41,6 +69,7 @@ const result = await Bun.build({
 	define: {
 		SEALWORT_RELEASE: JSON.stringify(release ?? ''),
 		SEALWORT_COMMIT_HASH: JSON.stringify(commitHash),
+		SEALWORT_REPOSITORY_URL: JSON.stringify(repositoryUrl),
 	},
 })
 
