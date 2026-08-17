@@ -1,5 +1,8 @@
 import * as assert from 'assert'
 import { test } from 'bun:test'
+import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
+import path from 'node:path'
+import { tmpdir } from 'node:os'
 
 test('ui:docker publishes the production build to host Kubo and verifies its CID', async () => {
 	const packageJson: unknown = await Bun.file(new URL('../package.json', import.meta.url)).json()
@@ -10,8 +13,47 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	if (typeof scripts !== 'object' || scripts === null || !('ui:docker' in scripts)) throw new Error('Missing ui:docker script')
 	assert.equal(
 		scripts['ui:docker'],
-		'SEALWORT_RELEASE="$(git describe --tags --exact-match 2>/dev/null || true)" SEALWORT_COMMIT_HASH="$(git rev-parse HEAD)" SEALWORT_REPOSITORY_URL="$(git remote get-url origin)" docker build --build-arg SEALWORT_RELEASE --build-arg SEALWORT_COMMIT_HASH --build-arg SEALWORT_REPOSITORY_URL --file Dockerfile --tag sealwort-ui . && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui',
+		'./scripts/build-docker.sh sealwort-ui && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui',
 	)
+
+	const repositoryRoot = new URL('..', import.meta.url).pathname
+	const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'sealwort-docker-build-test-'))
+	try {
+		const dockerStub = path.join(temporaryDirectory, 'docker')
+		const argumentLog = path.join(temporaryDirectory, 'arguments.txt')
+		await Bun.write(dockerStub, '#!/bin/sh\nprintf "%s\\n" "$@" > "$DOCKER_ARGUMENT_LOG"\n')
+		await chmod(dockerStub, 0o755)
+		const buildProcess = Bun.spawn(['./scripts/build-docker.sh', 'sealwort-test'], {
+			cwd: repositoryRoot,
+			env: {
+				...process.env,
+				PATH: `${ temporaryDirectory }:${ process.env.PATH ?? '' }`,
+				DOCKER_ARGUMENT_LOG: argumentLog,
+				SEALWORT_RELEASE: 'v1.2.3',
+				SEALWORT_COMMIT_HASH: '0123456789abcdef',
+				SEALWORT_REPOSITORY_URL: 'https://github.example/example/Sealwort',
+			},
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		assert.equal(await buildProcess.exited, 0, await new Response(buildProcess.stderr).text())
+		assert.deepEqual((await readFile(argumentLog, 'utf8')).trim().split('\n'), [
+			'build',
+			'--build-arg',
+			'SEALWORT_RELEASE=v1.2.3',
+			'--build-arg',
+			'SEALWORT_COMMIT_HASH=0123456789abcdef',
+			'--build-arg',
+			'SEALWORT_REPOSITORY_URL=https://github.example/example/Sealwort',
+			'--file',
+			'Dockerfile',
+			'--tag',
+			'sealwort-test',
+			'.',
+		])
+	} finally {
+		await rm(temporaryDirectory, { force: true, recursive: true })
+	}
 
 	const dockerfile = await Bun.file(new URL('../Dockerfile', import.meta.url)).text()
 	assert.match(dockerfile, /^FROM oven\/bun:1\.3\.14-alpine@sha256:[0-9a-f]{64} AS builder$/mu)
