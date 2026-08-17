@@ -1,7 +1,6 @@
 import { copyFile, mkdir, rm } from 'node:fs/promises'
-import { execFileSync } from 'node:child_process'
 import path from 'node:path'
-import { normalizeRepositoryUrl } from './buildMetadata.mjs'
+import { readBuildMetadata } from './buildMetadata.mjs'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
 const sourceDirectory = path.join(repositoryRoot, 'src')
@@ -11,29 +10,7 @@ const outputStylesDirectory = path.join(outputDirectory, 'styles')
 const outputAssetsDirectory = path.join(outputDirectory, 'assets')
 const virtualEntrypoint = 'sealwort:entrypoint'
 
-function readGitValue(arguments_: readonly string[]) {
-	try {
-		return execFileSync('git', arguments_, { cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-	} catch {
-		return undefined
-	}
-}
-
-const packageMetadata: unknown = await Bun.file(path.join(repositoryRoot, 'package.json')).json()
-const packageRepository = typeof packageMetadata === 'object' && packageMetadata !== null && 'repository' in packageMetadata && typeof packageMetadata.repository === 'string'
-	? packageMetadata.repository
-	: undefined
-
-const release = process.env.SEALWORT_RELEASE?.trim() || readGitValue(['describe', '--tags', '--exact-match'])
-const commitHash = process.env.SEALWORT_COMMIT_HASH?.trim() || process.env.GITHUB_SHA?.trim() || readGitValue(['rev-parse', 'HEAD'])
-const repositoryUrlSource = process.env.SEALWORT_REPOSITORY_URL?.trim() || readGitValue(['remote', 'get-url', 'origin']) || packageRepository
-if (commitHash === undefined || commitHash.length === 0) {
-	throw new Error('Build commit information is unavailable. Set SEALWORT_COMMIT_HASH when building outside a Git checkout.')
-}
-if (repositoryUrlSource === undefined || repositoryUrlSource.length === 0) {
-	throw new Error('Build repository information is unavailable. Set SEALWORT_REPOSITORY_URL when building outside a Git checkout.')
-}
-const repositoryUrl = normalizeRepositoryUrl(repositoryUrlSource)
+const { release, commitHash, repositoryUrl } = await readBuildMetadata(repositoryRoot)
 
 await rm(outputDirectory, { recursive: true, force: true })
 await Promise.all([

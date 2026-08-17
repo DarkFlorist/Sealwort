@@ -13,7 +13,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	if (typeof scripts !== 'object' || scripts === null || !('ui:docker' in scripts)) throw new Error('Missing ui:docker script')
 	assert.equal(
 		scripts['ui:docker'],
-		'./scripts/build-docker.sh sealwort-ui && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui',
+		'bun ./scripts/build-docker.mts sealwort-ui && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui',
 	)
 
 	const repositoryRoot = new URL('..', import.meta.url).pathname
@@ -23,7 +23,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 		const argumentLog = path.join(temporaryDirectory, 'arguments.txt')
 		await Bun.write(dockerStub, '#!/bin/sh\nprintf "%s\\n" "$@" > "$DOCKER_ARGUMENT_LOG"\n')
 		await chmod(dockerStub, 0o755)
-		const buildProcess = Bun.spawn(['./scripts/build-docker.sh', 'sealwort-test'], {
+		const buildProcess = Bun.spawn(['bun', './scripts/build-docker.mts', 'sealwort-test'], {
 			cwd: repositoryRoot,
 			env: {
 				...process.env,
@@ -78,15 +78,12 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	assert.match(releaseWorkflow, /BUILD_CID=\$\(cat \/ipfs_hash\.txt\)/u)
 	assert.match(releaseWorkflow, /if \[ "\$IPFS_HASH" != "\$BUILD_CID" \]/u)
 	assert.match(releaseWorkflow, /printf "%s\\n" "\$IPFS_HASH" > \/output\/ipfs-cid\.txt/u)
-	assert.match(releaseWorkflow, /--build-arg SEALWORT_COMMIT_HASH="\$GITHUB_SHA"/u)
-	assert.match(releaseWorkflow, /--build-arg SEALWORT_RELEASE="\$\{SEALWORT_RELEASE:-\}"/u)
-	assert.match(releaseWorkflow, /--build-arg SEALWORT_REPOSITORY_URL="\$GITHUB_SERVER_URL\/\$GITHUB_REPOSITORY"/u)
-	assert.match(releaseWorkflow, /SEALWORT_RELEASE=\$GITHUB_REF_NAME/u)
+	assert.match(releaseWorkflow, /bun \.\/scripts\/build-docker\.mts "\$IMAGE_NAME"/u)
 	const reviewWorkflow = await Bun.file(new URL('../.github/workflows/review.yml', import.meta.url)).text()
 	assert.match(reviewWorkflow, /actions\/upload-artifact@[0-9a-f]{40}/u)
 	const checksWorkflow = await Bun.file(new URL('../.github/workflows/checks.yml', import.meta.url)).text()
 	assert.match(checksWorkflow, /oven-sh\/setup-bun@[0-9a-f]{40}/u)
-	assert.match(checksWorkflow, /docker build --build-arg SEALWORT_COMMIT_HASH="\$GITHUB_SHA" --build-arg SEALWORT_REPOSITORY_URL="\$GITHUB_SERVER_URL\/\$GITHUB_REPOSITORY" --file Dockerfile --tag sealwort-ci \./u)
+	assert.match(checksWorkflow, /bun \.\/scripts\/build-docker\.mts sealwort-ci/u)
 
 	const buildScript = await Bun.file(new URL('../scripts/build.mts', import.meta.url)).text()
 	assert.match(buildScript, /copyFile\(path\.join\(sourceDirectory, 'assets', 'sealwort-botanical\.svg'\), path\.join\(outputAssetsDirectory, 'sealwort-botanical\.svg'\)\)/u)

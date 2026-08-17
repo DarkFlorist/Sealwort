@@ -42,8 +42,8 @@ export function App({
 }: {
 	readonly browserStorage?: SafeStackStorage
 	readonly walletRequestTimeoutMs?: number
-	readonly buildInformation: BuildInformation
-}) {
+	readonly buildInformation?: BuildInformation
+} = {}) {
 	const stackExport = useSignal<SafeStackExport | undefined>(undefined)
 	const stackVerified = useSignal(false)
 	const verifiedSafeStates = useSignal<readonly VerifiedSafeState[]>([])
@@ -507,7 +507,8 @@ export function App({
 		}
 		<footer class = 'site-footer'>
 			<p>
-				Sealwort by <a href = 'https://dark.florist/'>Dark Florist</a> · <BuildInformationLink information = { buildInformation } />
+				Sealwort by <a href = 'https://dark.florist/'>Dark Florist</a>
+				{ buildInformation === undefined ? <></> : <> · <BuildInformationLink information = { buildInformation } /></> }
 			</p>
 			<nav aria-label = 'Dark Florist social links'>
 				{ DARK_FLORIST_SOCIAL_LINKS.map((socialLink) =>
