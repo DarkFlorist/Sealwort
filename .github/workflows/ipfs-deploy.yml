@@ -22,9 +22,18 @@ jobs:
         run: |
           echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
           echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "SEALWORT_RELEASE=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          fi
 
       - name: Build image
-        run: docker build --file Dockerfile --tag "$IMAGE_NAME" .
+        run: |
+          docker build \
+            --build-arg SEALWORT_COMMIT_HASH="$GITHUB_SHA" \
+            --build-arg SEALWORT_RELEASE \
+            --file Dockerfile \
+            --tag "$IMAGE_NAME" \
+            .
 
       - name: Log in to GHCR
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
