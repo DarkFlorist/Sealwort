@@ -12,7 +12,7 @@
 		"test": "bun test",
 		"typecheck": "bun --bun tsc --noEmit --project tsconfig.json",
 		"check": "bun run test && bun run typecheck && bun run build",
-		"ui:docker": "docker build --file Dockerfile --tag sealwort-ui . && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui"
+		"ui:docker": "bun ./scripts/build-docker.mts sealwort-ui && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR sealwort-ui"
 	},
 	"dependencies": {
 		"@noble/curves": "1.9.1",

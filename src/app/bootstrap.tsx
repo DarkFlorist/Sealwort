@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { useErrorBoundary } from 'preact/hooks'
 import { App } from './main.js'
+import type { BuildInformation } from './buildInformation.js'
 
 const unexpectedFailure = signal(false)
 
@@ -20,30 +21,32 @@ function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	</main>
 }
 
-function AppBoundary() {
+function AppBoundary({ buildInformation }: { readonly buildInformation: BuildInformation | undefined }) {
 	const [renderError] = useErrorBoundary((caughtError) => {
 		console.error('Sealwort render failed.', caughtError)
 	})
 	if (renderError !== undefined || unexpectedFailure.value) return <FailureScreen />
-	return <App />
+	return buildInformation === undefined ? <App /> : <App buildInformation = { buildInformation } />
 }
 
-document.documentElement.classList.remove('sealwort-loading')
+export function bootstrapApplication(buildInformation: BuildInformation | undefined) {
+	document.documentElement.classList.remove('sealwort-loading')
 
-const app = document.querySelector('#app')
-if (app === null) throw new Error('Application root is missing.')
-if (window.top !== window.self) {
-	render(<FailureScreen embedded = { true } />, app)
-} else {
-	window.addEventListener('error', (event) => {
-		if (event.error === undefined) return
-		console.error('Unexpected Sealwort error.', event.error)
-		unexpectedFailure.value = true
-	})
-	window.addEventListener('unhandledrejection', (event) => {
-		event.preventDefault()
-		console.error('Unhandled Sealwort promise rejection.', event.reason)
-		unexpectedFailure.value = true
-	})
-	render(<AppBoundary />, app)
+	const app = document.querySelector('#app')
+	if (app === null) throw new Error('Application root is missing.')
+	if (window.top !== window.self) {
+		render(<FailureScreen embedded = { true } />, app)
+	} else {
+		window.addEventListener('error', (event) => {
+			if (event.error === undefined) return
+			console.error('Unexpected Sealwort error.', event.error)
+			unexpectedFailure.value = true
+		})
+		window.addEventListener('unhandledrejection', (event) => {
+			event.preventDefault()
+			console.error('Unhandled Sealwort promise rejection.', event.reason)
+			unexpectedFailure.value = true
+		})
+		render(<AppBoundary buildInformation = { buildInformation } />, app)
+	}
 }

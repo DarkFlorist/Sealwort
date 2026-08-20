@@ -18,6 +18,7 @@ import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
+import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -37,9 +38,11 @@ function getBrowserStorage() {
 export function App({
 	browserStorage = getBrowserStorage(),
 	walletRequestTimeoutMs,
+	buildInformation,
 }: {
 	readonly browserStorage?: SafeStackStorage
 	readonly walletRequestTimeoutMs?: number
+	readonly buildInformation?: BuildInformation
 } = {}) {
 	const stackExport = useSignal<SafeStackExport | undefined>(undefined)
 	const stackVerified = useSignal(false)
@@ -505,6 +508,7 @@ export function App({
 		<footer class = 'site-footer'>
 			<p>
 				Sealwort by <a href = 'https://dark.florist/'>Dark Florist</a>
+				{ buildInformation === undefined ? <></> : <> · <BuildInformationLink information = { buildInformation } /></> }
 			</p>
 			<nav aria-label = 'Dark Florist social links'>
 				{ DARK_FLORIST_SOCIAL_LINKS.map((socialLink) =>

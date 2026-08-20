@@ -1,5 +1,6 @@
 import { copyFile, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { readBuildMetadata } from './buildMetadata.mjs'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
 const sourceDirectory = path.join(repositoryRoot, 'src')
@@ -7,6 +8,8 @@ const outputDirectory = path.join(sourceDirectory, 'dist')
 const outputJavascriptDirectory = path.join(outputDirectory, 'js')
 const outputStylesDirectory = path.join(outputDirectory, 'styles')
 const outputAssetsDirectory = path.join(outputDirectory, 'assets')
+
+const { release, commitHash, repositoryUrl } = await readBuildMetadata(repositoryRoot)
 
 await rm(outputDirectory, { recursive: true, force: true })
 await Promise.all([
@@ -16,13 +19,18 @@ await Promise.all([
 ])
 
 const result = await Bun.build({
-	entrypoints: [path.join(sourceDirectory, 'app', 'bootstrap.tsx')],
+	entrypoints: [path.join(sourceDirectory, 'app', 'entrypoint.tsx')],
 	outdir: outputJavascriptDirectory,
 	target: 'browser',
 	format: 'esm',
 	minify: true,
 	sourcemap: 'linked',
 	naming: 'main.js',
+	define: {
+		SEALWORT_BUILD_RELEASE: JSON.stringify(release ?? ''),
+		SEALWORT_BUILD_COMMIT_HASH: JSON.stringify(commitHash ?? ''),
+		SEALWORT_BUILD_REPOSITORY_URL: JSON.stringify(repositoryUrl ?? ''),
+	},
 })
 
 if (!result.success) {

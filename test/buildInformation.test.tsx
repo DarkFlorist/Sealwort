@@ -1,0 +1,34 @@
+import * as assert from 'node:assert'
+import { afterEach, describe, test } from 'bun:test'
+import { cleanup, render, screen } from '@testing-library/preact'
+import { BuildInformationLink, getBuildInformation } from '../src/app/buildInformation.js'
+
+afterEach(cleanup)
+
+describe('build information', () => {
+	test('links a versioned build to its GitHub release', () => {
+		const information = getBuildInformation('v0.2.0', '0123456789abcdef', 'https://github.example/fork/Sealwort')
+		assert.notEqual(information, undefined)
+		if (information === undefined) throw new Error('Expected release build information.')
+		render(<BuildInformationLink information = { information } />)
+
+		const link = screen.getByRole('link', { name: 'Release v0.2.0' })
+		assert.equal(link.getAttribute('href'), 'https://github.example/fork/Sealwort/releases/tag/v0.2.0')
+	})
+
+	test('falls back to a linked abbreviated commit hash', () => {
+		const information = getBuildInformation(undefined, '0123456789abcdef', 'https://github.example/fork/Sealwort')
+		assert.notEqual(information, undefined)
+		if (information === undefined) throw new Error('Expected commit build information.')
+		render(<BuildInformationLink information = { information } />)
+
+		const link = screen.getByRole('link', { name: 'Commit 0123456' })
+		assert.equal(link.getAttribute('href'), 'https://github.example/fork/Sealwort/commit/0123456789abcdef')
+		assert.equal(link.getAttribute('title'), '0123456789abcdef')
+	})
+
+	test('omits provenance when a standalone build has no commit metadata', () => {
+		assert.equal(getBuildInformation(undefined, undefined, 'https://github.example/fork/Sealwort'), undefined)
+		assert.equal(getBuildInformation(undefined, '0123456789abcdef', undefined), undefined)
+	})
+})
