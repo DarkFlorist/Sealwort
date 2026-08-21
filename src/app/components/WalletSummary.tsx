@@ -1,6 +1,6 @@
 import type { ConnectedAccountInformation } from '../accountInspection.js'
 import { formatTokenBalance, getNativeAssetSymbol, type AssetBalance, type ConnectedSafeBalances, type NativeAssetBalance } from '../accountBalances.js'
-import { checksummedAddress } from '../ethereum.js'
+import { identifiedAddress } from '../addressLabels.js'
 import { LoadingIndicator } from '../Spinner.js'
 
 function connectedAccountType(accountInformation: ConnectedAccountInformation | undefined) {
@@ -64,7 +64,7 @@ export function WalletSummary({
 				</p>
 				<div class = 'wallet-summary-section wallet-identity'>
 					<span class = 'wallet-summary-label'>{ accountInformation?.kind === 'safe' ? 'Vault' : 'Connected account' }</span>
-					<code>{ checksummedAddress(account) }</code>
+					<code>{ identifiedAddress(account, chainId ?? 0n, account) }</code>
 				</div>
 				{ accountInformation?.kind === 'safe' && activeSignerLoading
 					? <div class = 'wallet-summary-section wallet-active-signer'>
@@ -73,7 +73,7 @@ export function WalletSummary({
 					</div>
 					: activeSigner === undefined ? <></> : <div class = 'wallet-summary-section wallet-active-signer'>
 						<span class = 'wallet-summary-label'>Active signer</span>
-						<code>{ checksummedAddress(activeSigner) }</code>
+						<code>{ identifiedAddress(activeSigner, chainId ?? 0n, account) }</code>
 					</div> }
 				{ accountInformation?.kind === 'safe'
 					? <section class = 'wallet-summary-section wallet-balance-summary'>

@@ -662,6 +662,69 @@ svg.spinner > circle {
 	word-break: break-all;
 }
 
+.transaction-data {
+	display: grid;
+	gap: 0.55rem;
+	word-break: normal;
+}
+
+.data-view-toggle {
+	display: inline-flex;
+	justify-self: start;
+	padding: 0.15rem;
+	border-radius: 0.55rem;
+	background: rgba(135, 148, 177, 0.12);
+}
+
+.data-view-toggle button {
+	padding: 0.28rem 0.6rem;
+	border-radius: 0.42rem;
+	color: #8794b1;
+	background: transparent;
+	font-size: 0.75rem;
+}
+
+.data-view-toggle button.selected {
+	color: #eef3ff;
+	background: #202a43;
+}
+
+.decoded-call {
+	display: grid;
+	gap: 0.4rem;
+}
+
+.decoded-call > strong {
+	color: #a9f3ce;
+}
+
+.decoded-call dl {
+	display: grid;
+	grid-template-columns: minmax(5rem, max-content) minmax(0, 1fr);
+	gap: 0.3rem 0.75rem;
+	margin: 0;
+	font-size: 0.88rem;
+}
+
+.decoded-call dt {
+	color: #8794b1;
+}
+
+.decoded-call dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.raw-data {
+	color: #c9d4ef;
+	font-size: 0.82rem;
+	overflow-wrap: anywhere;
+}
+
+.data-parse-error {
+	color: #ffdba5;
+}
+
 .badge {
 	display: inline-flex;
 	align-items: center;

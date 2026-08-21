@@ -8,6 +8,8 @@ import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
+import { createContract, ERC20 } from 'micro-eth-signer/advanced/abi.js'
+import { dataStringWith0xStart } from '../src/app/ethereum.js'
 
 afterEach(cleanup)
 
@@ -143,6 +145,60 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.getByRole('heading', { name: 'Gnosis Safe Transaction 3' }) !== undefined, true)
 		assert.equal(screen.getByText('0 / 1 signatures') !== undefined, true)
 		assert.equal(screen.getByText('Your signature will reach the required threshold. Choose whether to add the signature only or sign and execute.') !== undefined, true)
+	})
+
+	test('shows compact human-readable Safe execution configuration', () => {
+		renderStack()
+
+		assert.equal(screen.getByText('Call').previousElementSibling?.textContent, 'Operation')
+		assert.equal(screen.getByText('Not specified').previousElementSibling?.textContent, 'Safe tx gas')
+		assert.equal(screen.getAllByText('None').some((element) => element.previousElementSibling?.textContent === 'Base gas'), true)
+		assert.equal(screen.getByText('Gas refund disabled').previousElementSibling?.textContent, 'Gas price')
+		assert.equal(screen.getAllByText('Not enabled').length, 2)
+	})
+
+	test('defaults to parsed ERC-20 calldata, reads decimals, and toggles to raw data', async () => {
+		const data = createContract(ERC20).transfer.encodeInput({
+			to: '0x0000000000000000000000000000000000005678',
+			value: 1_500_000n,
+		})
+		const stack = createStack()
+		const transaction = stack.transactions[0]
+		if (transaction === undefined) throw new Error('Missing transaction fixture.')
+		const dataStack: SafeTransactionStack = {
+			...stack,
+			transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, data } } }],
+		}
+		const previousEthereum = window.ethereum
+		window.ethereum = {
+			request: async ({ method }) => method === 'eth_chainId' ? '0xaa36a7' : `0x${ '0'.repeat(63) }6`,
+		}
+		try {
+			renderStack({ stack: dataStack })
+			assert.equal(screen.getByText('transfer').textContent, 'transfer')
+			assert.notEqual(await screen.findByText('1.5 tokens'), undefined)
+			fireEvent.click(screen.getByRole('button', { name: 'Raw' }))
+			assert.notEqual(screen.getByText(dataStringWith0xStart(data)), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('identifies known and connected addresses inline', () => {
+		const stack = createStack()
+		const transaction = stack.transactions[0]
+		if (transaction === undefined) throw new Error('Missing transaction fixture.')
+		renderStack({
+			stack: {
+				...stack,
+				chainId: 1n,
+				transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2n } } }],
+			},
+		})
+
+		assert.match(screen.getByText(/\(WETH\)/u).textContent ?? '', /WETH/u)
+		assert.equal(screen.getAllByText(/\(connected wallet\)/u).length > 0, true)
 	})
 
 	test('asks a connected Safe wallet user to review the transaction before approval', () => {

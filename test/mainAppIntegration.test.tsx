@@ -9,6 +9,7 @@ import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction }
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { PERSISTED_SAFE_STACK_STORAGE_KEY, SAFE_STACK_PERSISTENCE_WARNING } from '../src/app/uiState.js'
 import { getWalletRequestTimeoutMessage } from '../src/app/walletProvider.js'
+import { identifiedAddress } from '../src/app/addressLabels.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
 const ownerPrivateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -199,11 +200,11 @@ describe('Sealwort app wallet workflows', () => {
 		window.ethereum = harness.provider
 		render(<App />)
 
-		await screen.findByText(checksummedAddress(ownerAddress))
+		await screen.findByText(identifiedAddress(ownerAddress, 1n, ownerAddress))
 		harness.setAccounts(['0x0000000000000000000000000000000000009876'])
 		harness.emitAccountsChanged()
 
-		await screen.findByText(checksummedAddress(0x9876n))
+		await screen.findByText(identifiedAddress(0x9876n, 1n, 0x9876n))
 	})
 
 	test('does not restore stale wallet identity after an account-change refresh fails', async () => {
@@ -211,7 +212,7 @@ describe('Sealwort app wallet workflows', () => {
 		window.ethereum = harness.provider
 		render(<App />)
 
-		const previousAccount = await screen.findByText(checksummedAddress(ownerAddress))
+		const previousAccount = await screen.findByText(identifiedAddress(ownerAddress, 1n, ownerAddress))
 		harness.failNextWalletIdentityRequest()
 		harness.emitAccountsChanged()
 

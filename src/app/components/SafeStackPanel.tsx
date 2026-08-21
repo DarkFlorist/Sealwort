@@ -2,20 +2,29 @@ import type { ConnectedAccountInformation } from '../accountInspection.js'
 import { getStackAccountCompatibility } from '../accountInspection.js'
 import { formatTokenBalance, getNativeAssetSymbol, getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../accountBalances.js'
 import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type SubmittedExecution, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
-import { checksummedAddress, dataStringWith0xStart } from '../ethereum.js'
+import { identifiedAddress } from '../addressLabels.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'
 import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason, getVisibleExecutionFundingReason } from '../uiState.js'
 import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilities.js'
+import { TransactionDataDetails } from './TransactionDataDetails.js'
 
-function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState, readonly source: string | undefined }) {
+const ZERO_ADDRESS = 0n
+
+function operationLabel(operation: bigint) {
+	if (operation === 0n) return 'Call'
+	if (operation === 1n) return 'Delegate call'
+	return `Unknown (${ operation.toString() })`
+}
+
+function SafeStateDetails({ state, source, chainId, connectedAccount }: { readonly state: VerifiedSafeState, readonly source: string | undefined, readonly chainId: bigint, readonly connectedAccount: bigint | undefined }) {
 	return <dl class = 'details safe-details'>
 		{ source === undefined ? <></> : <><dt>Source</dt><dd>{ source }</dd></> }
 		<dt>Version</dt><dd>{ state.version }</dd>
 		<dt>Nonce</dt><dd>{ state.nonce.toString() }</dd>
 		<dt>Threshold</dt><dd>{ state.threshold.toString() }/{ state.owners.length.toString() }</dd>
-		<dt>Owners</dt><dd class = 'owner-list'>{ state.owners.map((owner) => <code key = { owner.toString() }>{ checksummedAddress(owner) }</code>) }</dd>
+		<dt>Owners</dt><dd class = 'owner-list'>{ state.owners.map((owner) => <code key = { owner.toString() }>{ identifiedAddress(owner, chainId, connectedAccount) }</code>) }</dd>
 	</dl>
 }
 
@@ -96,7 +105,7 @@ export function SafeStackPanel({
 	const stackAccountCompatibility = getStackAccountCompatibility(accountInformation, stack, currentSafeInformation?.state)
 	return <section class = 'panel'>
 		<div class = 'stack-header'>
-			<div><p class = 'eyebrow'>Chain { stack.chainId.toString() } · Gnosis Safe { stack.safeVersion }</p><h2 class = 'address'>{ checksummedAddress(stack.safeAddress) }</h2></div>
+			<div><p class = 'eyebrow'>Chain { stack.chainId.toString() } · Gnosis Safe { stack.safeVersion }</p><h2 class = 'address'>{ identifiedAddress(stack.safeAddress, stack.chainId, account) }</h2></div>
 			<div><span class = 'badge'>{ stack.threshold.toString() } signature{ stack.threshold === 1n ? '' : 's' } required</span></div>
 		</div>
 		{ usingConnectedSafeWallet ? <p class = 'signer-route-note'>This connected Safe wallet exposes the Gnosis Safe address and can route signatures and completed executions through its configured signer.</p> : <></> }
@@ -106,7 +115,7 @@ export function SafeStackPanel({
 				? <p class = 'muted' role = 'status'><LoadingIndicator>Retrieving current Gnosis Safe information…</LoadingIndicator></p>
 				: currentSafeInformation.state === undefined
 					? <>{ currentSafeInformation.source === undefined ? <></> : <p class = 'meta'>Source: { currentSafeInformation.source }</p> }<p class = 'safe-information-error'>{ currentSafeInformation.error ?? 'Current Gnosis Safe information is unavailable.' }</p></>
-					: <SafeStateDetails state = { currentSafeInformation.state } source = { currentSafeInformation.source }/> }
+					: <SafeStateDetails state = { currentSafeInformation.state } source = { currentSafeInformation.source } chainId = { stack.chainId } connectedAccount = { account }/> }
 		</section>
 		{ stackAccountCompatibility?.status === 'mismatch' ? <p class = 'account-compatibility mismatch' role = 'alert'>{ stackAccountCompatibility.message }</p> : <></> }
 		<div class = 'transactions'>{ stack.transactions.map((transaction, transactionIndex) => {
@@ -208,11 +217,17 @@ export function SafeStackPanel({
 				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready ? '' : ' pending' }` }>{ signatureCount } / { stack.threshold.toString() } signatures</span></div>
 				<dl class = 'details'>
 					<dt>Nonce</dt><dd>{ transaction.safeTx.message.nonce.toString() }</dd>
-					<dt>Destination</dt><dd class = 'address'>{ checksummedAddress(transaction.safeTx.message.to) }</dd>
+					<dt>Destination</dt><dd class = 'address'>{ identifiedAddress(transaction.safeTx.message.to, stack.chainId, account) }</dd>
 					<dt>Value</dt><dd>{ formatTokenBalance(transaction.safeTx.message.value, 18) } { nativeAssetSymbol }</dd>
-					<dt>Data</dt><dd class = 'address'>{ dataStringWith0xStart(transaction.safeTx.message.data) }</dd>
+					<dt>Operation</dt><dd>{ operationLabel(transaction.safeTx.message.operation) }</dd>
+					<dt>Safe tx gas</dt><dd>{ transaction.safeTx.message.safeTxGas === 0n ? 'Not specified' : transaction.safeTx.message.safeTxGas.toString() }</dd>
+					<dt>Base gas</dt><dd>{ transaction.safeTx.message.baseGas === 0n ? 'None' : transaction.safeTx.message.baseGas.toString() }</dd>
+					<dt>Gas price</dt><dd>{ transaction.safeTx.message.gasPrice === 0n ? 'Gas refund disabled' : `${ transaction.safeTx.message.gasPrice.toString() } wei` }</dd>
+					<dt>Gas token</dt><dd class = { transaction.safeTx.message.gasToken === ZERO_ADDRESS ? undefined : 'address' }>{ transaction.safeTx.message.gasToken === ZERO_ADDRESS ? transaction.safeTx.message.gasPrice === 0n ? 'Not enabled' : 'Native token' : identifiedAddress(transaction.safeTx.message.gasToken, stack.chainId, account) }</dd>
+					<dt>Refund receiver</dt><dd class = { transaction.safeTx.message.refundReceiver === ZERO_ADDRESS ? undefined : 'address' }>{ transaction.safeTx.message.refundReceiver === ZERO_ADDRESS ? transaction.safeTx.message.gasPrice === 0n ? 'Not enabled' : 'Transaction sender' : identifiedAddress(transaction.safeTx.message.refundReceiver, stack.chainId, account) }</dd>
+					<dt>Data</dt><dd><TransactionDataDetails data = { transaction.safeTx.message.data } destination = { transaction.safeTx.message.to } transactionValue = { transaction.safeTx.message.value } chainId = { stack.chainId } connectedAccount = { account }/></dd>
 					<dt>Gnosis Safe tx hash</dt><dd class = 'address'>{ `0x${ transaction.safeTxHash.toString(16).padStart(64, '0') }` }</dd>
-					<dt>Signed owners</dt><dd>{ transaction.signatures.length === 0 ? 'None' : transaction.signatures.map(({ signer }) => checksummedAddress(signer)).join(', ') }</dd>
+					<dt>Signed owners</dt><dd>{ transaction.signatures.length === 0 ? 'None' : transaction.signatures.map(({ signer }) => identifiedAddress(signer, stack.chainId, account)).join(', ') }</dd>
 				</dl>
 				<div class = 'transaction-actions'>
 					{ actionExplanation === undefined ? <></> : <p class = { actionDisabledReason === undefined ? 'muted' : 'signing-explanation' } id = { actionExplanationId }>{ safeDataLoading ? <LoadingIndicator>{ actionExplanation }</LoadingIndicator> : actionExplanation }</p> }
