@@ -145,6 +145,21 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.getByText('Your signature will reach the required threshold. Choose whether to add the signature only or sign and execute.') !== undefined, true)
 	})
 
+	test('renders attacker-controlled stack text without interpreting HTML', () => {
+		const websiteOrigin = '<img src="https://attacker.example/collect" onerror="globalThis.compromised=true">'
+		const baseStack = createStack()
+		const stack: SafeTransactionStack = {
+			...baseStack,
+			transactions: baseStack.transactions.map((transaction) => ({ ...transaction, websiteOrigin })),
+		}
+		renderStack({ stack })
+
+		const renderedOrigin = screen.getByText(websiteOrigin)
+		assert.equal(renderedOrigin.textContent, websiteOrigin)
+		assert.equal(renderedOrigin.childElementCount, 0)
+		assert.equal(document.querySelector('img[src="https://attacker.example/collect"]'), null)
+	})
+
 	test('asks a connected Safe wallet user to review the transaction before approval', () => {
 		renderStack({
 			account: safeAddress,

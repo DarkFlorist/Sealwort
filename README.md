@@ -87,6 +87,11 @@ These checks are repeated immediately before the wallet request.
   the endpoint selected by the user at runtime. A response or meta CSP cannot be
   expanded after delivery, so a static build cannot add only a browser-stored
   custom host to the original single-origin allowlist.
+- Explicitly accepts that configurable RPC hosts broaden `connect-src` from one
+  origin to HTTPS origins. Compensating controls include the strict runtime Safe
+  Stack schema, Preact text escaping for imported and provider-controlled values,
+  no raw-HTML or dynamic-code rendering paths, and the remaining restrictive CSP
+  directives (`default-src 'none'`, same-origin scripts, and disabled objects).
 
 ## Development
 
