@@ -6,6 +6,7 @@ import type { ConnectedSafeWalletSigner } from './appTypes.js'
 import { EthereumAddress } from './safeStackProtocol.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
+import { isWalletChainDiscoveryTimeoutError, type WalletRequestTimeoutError } from './walletProvider.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -16,9 +17,10 @@ type ConnectedSafeBalanceState = {
 }
 
 type ConnectedWalletLoadResult = { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
-type WalletLoadResult<RequestAccess extends boolean> =
+type WalletLoadResult =
 	| ConnectedWalletLoadResult
-	| (RequestAccess extends true ? never : { readonly status: 'disconnected' })
+	| { readonly status: 'disconnected' }
+	| { readonly status: 'unavailable', readonly error: WalletRequestTimeoutError }
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -129,19 +131,26 @@ export function useWalletState() {
 		}
 	}
 
-	const load = async <RequestAccess extends boolean>(
+	const load = async (
 		provider: InjectedProvider,
 		operationRevision: number,
-		requestAccess: RequestAccess,
-	): Promise<WalletLoadResult<RequestAccess> | undefined> => {
+		requestAccess: boolean,
+	): Promise<WalletLoadResult | undefined> => {
 		try {
 			const accountsResult = await provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' })
 			const accounts = EthereumAccounts.parse(accountsResult)
 			if (!isCurrent(operationRevision)) return undefined
 			const selectedAccount = accounts[0]
-			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
-			if (selectedAccount === undefined) return { status: 'disconnected' } as WalletLoadResult<RequestAccess>
-			const chainIdResult = await provider.request({ method: 'eth_chainId' })
+			if (selectedAccount === undefined) return { status: 'disconnected' }
+			let chainIdResult: unknown
+			try {
+				chainIdResult = await provider.request({ method: 'eth_chainId' })
+			} catch (chainDiscoveryError) {
+				if (isWalletChainDiscoveryTimeoutError(chainDiscoveryError)) {
+					return { status: 'unavailable', error: chainDiscoveryError }
+				}
+				throw chainDiscoveryError
+			}
 			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined
 			account.value = selectedAccount

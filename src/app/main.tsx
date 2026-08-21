@@ -17,17 +17,10 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { isWalletChainDiscoveryTimeoutError, withWalletRequestTimeout } from './walletProvider.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
-const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
-
-function getAppUserFacingErrorMessage(error: unknown) {
-	return isWalletChainDiscoveryTimeoutError(error)
-		? WALLET_CONNECTION_UNAVAILABLE_MESSAGE
-		: getUserFacingErrorMessage(error)
-}
 
 async function getProvider() {
 	if (window.ethereum === undefined) throw new Error('No injected Ethereum wallet was found.')
@@ -114,11 +107,12 @@ export function App({
 		manual: boolean,
 	) => {
 		error.value = undefined
-		const walletIdentity = await loadWallet(provider, operationRevision, false).catch((walletLoadError: unknown) => {
-			if (!manual && isWalletChainDiscoveryTimeoutError(walletLoadError)) return
-			throw walletLoadError
-		})
+		const walletIdentity = await loadWallet(provider, operationRevision, false)
 		if (walletIdentity === undefined) return
+		if (walletIdentity.status === 'unavailable') {
+			if (manual) throw walletIdentity.error
+			return
+		}
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
 		const verificationAction = getAutomaticStackVerificationAction(loadedStack !== undefined, walletIdentity.status === 'connected' ? walletIdentity.account : undefined)
@@ -170,7 +164,7 @@ export function App({
 				status.value = undefined
 			}
 			stopWalletLoading(walletRefreshRevision)
-			error.value = getAppUserFacingErrorMessage(providerError)
+			error.value = getUserFacingErrorMessage(providerError)
 		} finally {
 			if (provider === window.ethereum && isCurrentWalletOperation(walletRefreshRevision)) {
 				applicationLoading.value = false
@@ -203,7 +197,7 @@ export function App({
 			applicationLoading.value = false
 			stackVerificationLoading.value = false
 			finishPendingAction('refresh')
-			error.value = getAppUserFacingErrorMessage(refreshError)
+			error.value = getUserFacingErrorMessage(refreshError)
 		}
 	}
 
@@ -224,6 +218,8 @@ export function App({
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
 			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
 			if (walletIdentity === undefined) return
+			if (walletIdentity.status === 'unavailable') throw walletIdentity.error
+			if (walletIdentity.status === 'disconnected') return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()
@@ -248,7 +244,7 @@ export function App({
 			}
 			stopWalletLoading(connectWalletRevision)
 			status.value = undefined
-			error.value = getAppUserFacingErrorMessage(connectError)
+			error.value = getUserFacingErrorMessage(connectError)
 		} finally {
 			if (isCurrentStackOperation(stackRevision.peek(), verificationRevision, stackExport.peek(), loadedStackAtVerification)) stackVerificationLoading.value = false
 			if (isCurrentWalletOperation(connectWalletRevision)) finishPendingAction(action)
@@ -296,7 +292,7 @@ export function App({
 		} catch (importError) {
 			if (stackRevision.peek() !== importRevision) return
 			status.value = undefined
-			error.value = getAppUserFacingErrorMessage(importError)
+			error.value = getUserFacingErrorMessage(importError)
 		} finally {
 			if (stackRevision.peek() === importRevision) {
 				stackVerificationLoading.value = false
@@ -327,7 +323,7 @@ export function App({
 		} catch (fileReadError) {
 			if (stackRevision.peek() !== fileReadRevision) return
 			status.value = undefined
-			error.value = getAppUserFacingErrorMessage(fileReadError)
+			error.value = getUserFacingErrorMessage(fileReadError)
 		} finally {
 			if (stackRevision.peek() === fileReadRevision) finishPendingAction(action)
 		}
