@@ -1,12 +1,12 @@
-import { ChainDiscoveryUnavailableError } from './chainDiscoveryError.js'
+import { ChainDiscoveryUnavailableError, type ChainDiscoveryContext } from './chainDiscoveryError.js'
 import { isWalletChainDiscoveryTimeoutError } from './walletProvider.js'
 
-export async function withChainDiscoveryError<Result>(operation: () => Promise<Result>) {
+export async function mapChainDiscoveryTimeout<Result>(operation: () => Promise<Result>, context: ChainDiscoveryContext) {
 	try {
 		return await operation()
 	} catch (chainDiscoveryError) {
 		if (isWalletChainDiscoveryTimeoutError(chainDiscoveryError)) {
-			throw new ChainDiscoveryUnavailableError({ cause: chainDiscoveryError })
+			throw new ChainDiscoveryUnavailableError(context, { cause: chainDiscoveryError })
 		}
 		throw chainDiscoveryError
 	}

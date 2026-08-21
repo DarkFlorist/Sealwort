@@ -19,7 +19,8 @@ import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
-import { withChainDiscoveryError } from './chainDiscovery.js'
+import { mapChainDiscoveryTimeout } from './chainDiscovery.js'
+import { ChainDiscoveryUnavailableError } from './chainDiscoveryError.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -99,16 +100,32 @@ export function App({
 	}
 
 	const verifyLoadedStack = async (provider: InjectedProvider, loadedStack: SafeStackExport) => {
-		return await withChainDiscoveryError(async () => await validateSafeStackAtCurrentNonce(provider, loadedStack))
+		return await mapChainDiscoveryTimeout(async () => await validateSafeStackAtCurrentNonce(provider, loadedStack), 'stack-verification')
+	}
+
+	const loadWalletIdentity = async (
+		provider: InjectedProvider,
+		operationRevision: number,
+		requestAccess: boolean,
+		reportUnavailable: boolean,
+	) => {
+		try {
+			return await loadWallet(provider, operationRevision, requestAccess)
+		} catch (walletLoadError) {
+			if (!(walletLoadError instanceof ChainDiscoveryUnavailableError) || walletLoadError.context !== 'wallet-connection') throw walletLoadError
+			if (!isCurrentWalletOperation(operationRevision)) return undefined
+			if (reportUnavailable) throw walletLoadError
+			return undefined
+		}
 	}
 
 	const refreshWalletAndStack = async (
 		provider: InjectedProvider,
 		operationRevision: number,
-		intent: 'discover' | 'refresh',
+		manual: boolean,
 	) => {
 		error.value = undefined
-		const walletIdentity = await loadWallet(provider, operationRevision, intent)
+		const walletIdentity = await loadWalletIdentity(provider, operationRevision, false, manual)
 		if (walletIdentity === undefined) return
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
@@ -150,7 +167,7 @@ export function App({
 		stackVerificationLoading.value = loadedStack !== undefined
 		try {
 			await Promise.all([
-				refreshWalletAndStack(requestProvider, walletRefreshRevision, manual ? 'refresh' : 'discover'),
+				refreshWalletAndStack(requestProvider, walletRefreshRevision, manual),
 				loadedStack === undefined ? Promise.resolve() : refreshSafeInformation(loadedStack, refreshRevision),
 			])
 		} catch (providerError) {
@@ -213,7 +230,7 @@ export function App({
 		try {
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
-			const walletIdentity = await loadWallet(provider, connectWalletRevision, 'connect')
+			const walletIdentity = await loadWalletIdentity(provider, connectWalletRevision, true, true)
 			if (walletIdentity === undefined) return
 			if (walletIdentity.status === 'disconnected') return
 			verifiedSafeStates.value = []

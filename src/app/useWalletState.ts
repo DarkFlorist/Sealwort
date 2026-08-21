@@ -7,7 +7,6 @@ import { EthereumAddress } from './safeStackProtocol.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
 import { readWalletChainId } from './walletConnection.js'
-import { WalletConnectionUnavailableError } from './walletConnectionError.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -21,7 +20,6 @@ type ConnectedWalletLoadResult = { readonly status: 'connected', readonly accoun
 type WalletLoadResult =
 	| ConnectedWalletLoadResult
 	| { readonly status: 'disconnected' }
-type WalletLoadIntent = 'discover' | 'refresh' | 'connect'
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -135,26 +133,16 @@ export function useWalletState() {
 	const load = async (
 		provider: InjectedProvider,
 		operationRevision: number,
-		intent: WalletLoadIntent,
+		requestAccess: boolean,
 	): Promise<WalletLoadResult | undefined> => {
 		try {
-			const accountsResult = await provider.request({ method: intent === 'connect' ? 'eth_requestAccounts' : 'eth_accounts' })
+			const accountsResult = await provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' })
 			const accounts = EthereumAccounts.parse(accountsResult)
 			if (!isCurrent(operationRevision)) return undefined
 			const selectedAccount = accounts[0]
-			if (selectedAccount === undefined) {
-				if (intent === 'connect') throw new Error('The wallet did not provide an account.')
-				return { status: 'disconnected' }
-			}
-			let selectedChainId: bigint
-			try {
-				selectedChainId = await readWalletChainId(provider)
-			} catch (chainDiscoveryError) {
-				if (intent === 'discover' && chainDiscoveryError instanceof WalletConnectionUnavailableError) {
-					return isCurrent(operationRevision) ? { status: 'disconnected' } : undefined
-				}
-				throw chainDiscoveryError
-			}
+			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
+			if (selectedAccount === undefined) return { status: 'disconnected' }
+			const selectedChainId = await readWalletChainId(provider)
 			if (!isCurrent(operationRevision)) return undefined
 			account.value = selectedAccount
 			chainId.value = selectedChainId
