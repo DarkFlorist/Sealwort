@@ -2,13 +2,16 @@ import * as assert from 'node:assert'
 import { afterEach, describe, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact'
 import { addr, signTyped } from 'micro-eth-signer'
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { App } from '../src/app/main.js'
+import { TOKEN_METADATA_ABI } from '../src/app/abis/tokenMetadata.js'
 import { bytesToHex, checksummedAddress, encodeSafeReadCall } from '../src/app/ethereum.js'
 import { createSafeTx, encodeSafeTransactionHashCall, getSafeTxHash, safeTxToTypedData } from '../src/app/safeProtocol.js'
 import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction } from '../src/app/safeStackProtocol.js'
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { PERSISTED_SAFE_STACK_STORAGE_KEY, SAFE_STACK_PERSISTENCE_WARNING } from '../src/app/uiState.js'
 import { getWalletRequestTimeoutMessage } from '../src/app/walletProvider.js'
+import { identifiedAddress } from '../src/app/addressLabels.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
 const ownerPrivateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -19,6 +22,7 @@ const nonOwnerAddress = 0x9876n
 const safeAddress = 0x1234n
 const safeTx = createSafeTx(1n, safeAddress, { to: 0x5678n, value: 0n, input: new Uint8Array() }, 3n)
 const safeTxHash = BigInt(getSafeTxHash(safeTx))
+const balanceOfSelector = bytesToHex(createContract(TOKEN_METADATA_ABI).balanceOf.encodeInput(checksummedAddress(0n))).slice(0, 10)
 
 function uintWord(value: bigint) {
 	const bytes = new Uint8Array(32)
@@ -168,7 +172,7 @@ function createProviderHarness(options: {
 						case selectors.threshold: return bytesToHex(uintWord(options.threshold ?? 2n))
 						case selectors.transactionHash: return bytesToHex(uintWord(safeTxHash))
 						default:
-							if (call.data.startsWith('0x70a08231')) return bytesToHex(uintWord(0n))
+							if (call.data.startsWith(balanceOfSelector)) return bytesToHex(uintWord(0n))
 							throw new Error(`Unexpected eth_call selector ${ call.data.slice(0, 10) }`)
 					}
 				}
@@ -199,11 +203,11 @@ describe('Sealwort app wallet workflows', () => {
 		window.ethereum = harness.provider
 		render(<App />)
 
-		await screen.findByText(checksummedAddress(ownerAddress))
+		await screen.findByText(identifiedAddress(ownerAddress, 1n, ownerAddress))
 		harness.setAccounts(['0x0000000000000000000000000000000000009876'])
 		harness.emitAccountsChanged()
 
-		await screen.findByText(checksummedAddress(0x9876n))
+		await screen.findByText(identifiedAddress(0x9876n, 1n, 0x9876n))
 	})
 
 	test('does not restore stale wallet identity after an account-change refresh fails', async () => {
@@ -211,7 +215,7 @@ describe('Sealwort app wallet workflows', () => {
 		window.ethereum = harness.provider
 		render(<App />)
 
-		const previousAccount = await screen.findByText(checksummedAddress(ownerAddress))
+		const previousAccount = await screen.findByText(identifiedAddress(ownerAddress, 1n, ownerAddress))
 		harness.failNextWalletIdentityRequest()
 		harness.emitAccountsChanged()
 

@@ -29,7 +29,7 @@ export const bytes32String = (value: bigint): Hex => `0x${ value.toString(16).pa
 
 export const keccak256 = (value: Uint8Array): Uint8Array => keccak_256(value)
 
-const functionSelector = (signature: string): Hex => `0x${ nobleBytesToHex(keccak_256(utf8ToBytes(signature)).slice(0, 4)) }`
+export const functionSelector = (signature: string): Hex => `0x${ nobleBytesToHex(keccak_256(utf8ToBytes(signature)).slice(0, 4)) }`
 
 const SAFE_READ_CALLS = {
 	VERSION: functionSelector('VERSION()'),
