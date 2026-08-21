@@ -1,6 +1,7 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { getUserFacingErrorMessage, isUserRejectedError, readSafeStackFile } from '../src/app/userFacingErrors.js'
+import { ChainDiscoveryUnavailableError } from '../src/app/chainDiscoveryError.js'
 
 describe('user-facing errors', () => {
 	test('normalizes wallet rejections, provider objects, and unknown thrown values', () => {
@@ -14,6 +15,8 @@ describe('user-facing errors', () => {
 			data: { originalError: { message: 'The Safe signing route is unavailable.' } },
 		}), 'The Safe signing route is unavailable.')
 		assert.equal(getUserFacingErrorMessage({ reason: 'opaque' }), 'An unexpected error occurred. Try again or reload Sealwort.')
+		assert.equal(getUserFacingErrorMessage(new ChainDiscoveryUnavailableError('wallet-connection')), 'The wallet connection could not be completed. Try connecting again.')
+		assert.equal(getUserFacingErrorMessage(new ChainDiscoveryUnavailableError('stack-verification')), 'The wallet network could not be confirmed. Try again.')
 	})
 
 	test('recognizes wallet rejection variants that should leave signing retryable', () => {

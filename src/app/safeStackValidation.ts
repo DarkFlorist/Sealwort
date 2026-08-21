@@ -1,5 +1,7 @@
 import * as funtypes from 'funtypes'
+import { readChainId } from './chainDiscovery.js'
 import { addressString, decodeSafeOwners, decodeSafeUint, decodeSafeVersion, encodeSafeReadCall, ensureHex } from './ethereum.js'
+import type { InjectedProvider, ProviderRequest } from './provider.js'
 import { assertInterceptorSafeTransactionPolicy, assertUniqueSafeTransactionStacks, encodeSafeTransactionHashCall, getSafeTxHash, recoverSafeSignatureOwner } from './safeProtocol.js'
 import { assertSupportedSafeDeployment, getSupportedSafeSingleton, SUPPORTED_SAFE_VERSIONS } from './safeDeployments.js'
 import {
@@ -9,17 +11,6 @@ import {
 	SafeStackExport,
 	type SafeTransactionStack,
 } from './safeStackProtocol.js'
-
-export type ProviderRequest = {
-	readonly method: string
-	readonly params?: readonly unknown[]
-}
-
-export type InjectedProvider = {
-	request(request: ProviderRequest): Promise<unknown>
-	on?(eventName: 'accountsChanged' | 'chainChanged', listener: (value: unknown) => void): void
-	removeListener?(eventName: 'accountsChanged' | 'chainChanged', listener: (value: unknown) => void): void
-}
 
 export type VerifiedSafeState = {
 	readonly version: string
@@ -178,7 +169,7 @@ async function validateSafeStackWithNonceValidator(
 	validateNonce: SafeNonceValidator,
 ) {
 	await validateStackFile(stackExport)
-	const walletChainId = BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' })))
+	const walletChainId = await readChainId(provider, 'stack-verification')
 	const blockTag = parseBlockTag(await provider.request({ method: 'eth_blockNumber' }))
 	const verifiedStates: VerifiedSafeState[] = []
 	const verifiedEoaOwners = new Set<bigint>()
@@ -219,7 +210,7 @@ async function validateSafeStackWithNonceValidator(
 		}
 		verifiedStates.push(safeState)
 	}
-	const walletChainIdAfterValidation = BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' })))
+	const walletChainIdAfterValidation = await readChainId(provider, 'stack-verification')
 	if (walletChainIdAfterValidation !== walletChainId) throw new Error('The wallet network changed while the Gnosis Safe stack was being verified. Verify it again.')
 	return verifiedStates
 }

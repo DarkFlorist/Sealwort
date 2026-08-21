@@ -1,7 +1,8 @@
 import * as funtypes from 'funtypes'
 import { addressString, ensureHex } from './ethereum.js'
+import type { InjectedProvider } from './provider.js'
 import type { SafeTransactionStack } from './safeStackProtocol.js'
-import { type InjectedProvider, type VerifiedSafeState, readSafeState } from './safeStackValidation.js'
+import { type VerifiedSafeState, readSafeState } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { SUPPORTED_SAFE_VERSIONS } from './safeDeployments.js'
 

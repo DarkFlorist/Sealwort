@@ -3,9 +3,10 @@ import * as funtypes from 'funtypes'
 import { type ConnectedAccountInformation, inspectConnectedAccount } from './accountInspection.js'
 import { type ConnectedSafeBalances, readConnectedSafeBalances } from './accountBalances.js'
 import type { ConnectedSafeWalletSigner } from './appTypes.js'
+import type { InjectedProvider } from './provider.js'
 import { EthereumAddress } from './safeStackProtocol.js'
-import type { InjectedProvider } from './safeStackValidation.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
+import { readChainId } from './chainDiscovery.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -14,6 +15,11 @@ type ConnectedSafeBalanceState = {
 	readonly chainId: bigint
 	readonly balances: ConnectedSafeBalances
 }
+
+type ConnectedWalletLoadResult = { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
+type WalletLoadResult =
+	| ConnectedWalletLoadResult
+	| { readonly status: 'disconnected' }
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -31,9 +37,7 @@ export function useWalletState() {
 
 	const isCurrent = (operationRevision: number) => revision.peek() === operationRevision
 
-	const beginLoad = () => {
-		const operationRevision = revision.peek() + 1
-		revision.value = operationRevision
+	const resetWalletState = () => {
 		account.value = undefined
 		chainId.value = undefined
 		information.value = undefined
@@ -42,6 +46,12 @@ export function useWalletState() {
 		balancesLoading.value = false
 		safeWalletSigners.value = []
 		safeWalletSignerLoading.value = false
+	}
+
+	const beginLoad = () => {
+		const operationRevision = revision.peek() + 1
+		revision.value = operationRevision
+		resetWalletState()
 		loading.value = true
 		return operationRevision
 	}
@@ -120,24 +130,27 @@ export function useWalletState() {
 		}
 	}
 
-	const load = async (provider: InjectedProvider, operationRevision: number, requestAccess: boolean) => {
+	const load = async (
+		provider: InjectedProvider,
+		operationRevision: number,
+		requestAccess: boolean,
+	): Promise<WalletLoadResult | undefined> => {
 		try {
-			const [accountsResult, chainIdResult] = await Promise.all([
-				provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' }),
-				provider.request({ method: 'eth_chainId' }),
-			])
+			const accountsResult = await provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' })
 			const accounts = EthereumAccounts.parse(accountsResult)
-			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined
 			const selectedAccount = accounts[0]
+			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
+			if (selectedAccount === undefined) return { status: 'disconnected' }
+			const selectedChainId = await readChainId(provider, 'wallet-connection')
+			if (!isCurrent(operationRevision)) return undefined
 			account.value = selectedAccount
 			chainId.value = selectedChainId
-			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
 			const accountInformationPromise = refreshAccountInformation(provider, selectedAccount, selectedChainId, operationRevision)
 			void refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision)
 			await accountInformationPromise
 			if (!isCurrent(operationRevision)) return undefined
-			return { account: selectedAccount, chainId: selectedChainId }
+			return { status: 'connected', account: selectedAccount, chainId: selectedChainId }
 		} finally {
 			if (isCurrent(operationRevision)) loading.value = false
 		}

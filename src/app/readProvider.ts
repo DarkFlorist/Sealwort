@@ -1,5 +1,5 @@
 import * as funtypes from 'funtypes'
-import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js'
+import type { InjectedProvider, ProviderRequest } from './provider.js'
 import { DEFAULT_ETHEREUM_RPC_URL, getEthereumRpcHost } from './rpcSettings.js'
 
 export type SafeInformationSource =

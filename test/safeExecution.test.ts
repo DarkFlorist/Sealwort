@@ -2,9 +2,9 @@ import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { addressString, bytesFromHex, bytesToHex, ensureHex } from '../src/app/ethereum.js'
+import type { ProviderRequest } from '../src/app/provider.js'
 import { createSafeTx } from '../src/app/safeProtocol.js'
 import { encodeSafeExecutionCall, readSafeExecutionGasFunding, readSafeExecutionReceipt, submitSafeExecution } from '../src/app/safeExecution.js'
-import type { ProviderRequest } from '../src/app/safeStackValidation.js'
 
 const SAFE_EXECUTION_ABI = [{
 	type: 'function',

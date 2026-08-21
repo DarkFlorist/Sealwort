@@ -1,6 +1,6 @@
 import { addressString } from './ethereum.js'
+import type { InjectedProvider } from './provider.js'
 import { EthereumAddress } from './safeStackProtocol.js'
-import type { InjectedProvider } from './safeStackValidation.js'
 
 // EIP-5792 standardizes capability discovery; these versioned semantics remain
 // experimental until an equivalent connected Safe execution capability has its own ERC.

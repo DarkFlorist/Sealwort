@@ -1,3 +1,10 @@
+import { ChainDiscoveryUnavailableError, type ChainDiscoveryContext } from './chainDiscoveryError.js'
+
+const CHAIN_DISCOVERY_UNAVAILABLE_MESSAGES = {
+	'wallet-connection': 'The wallet connection could not be completed. Try connecting again.',
+	'stack-verification': 'The wallet network could not be confirmed. Try again.',
+} as const satisfies Record<ChainDiscoveryContext, string>
+
 type ErrorRecord = {
 	readonly code?: unknown
 	readonly message?: unknown
@@ -44,6 +51,7 @@ export function isUserRejectedError(error: unknown): boolean {
 
 export function getUserFacingErrorMessage(error: unknown) {
 	if (isUserRejectedError(error)) return 'The wallet request was rejected.'
+	if (error instanceof ChainDiscoveryUnavailableError) return CHAIN_DISCOVERY_UNAVAILABLE_MESSAGES[error.context]
 	if (error instanceof Error && error.message.trim().length !== 0) {
 		const nestedMessage = nestedProviderMessage(error, new Set<object>())
 		return nestedMessage ?? error.message

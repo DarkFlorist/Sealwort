@@ -1,8 +1,8 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
+import type { InjectedProvider } from '../src/app/provider.js'
 import { createSafeTx } from '../src/app/safeProtocol.js'
 import { submitSafeExecution } from '../src/app/safeExecution.js'
-import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { getAutomaticStackVerificationAction, getExecutionDisabledReason, getExecutionGasFundingDisabledReason, getNativeTransferDisabledReason, getSafeStackTextAction, getSignatureDisabledReason, getVisibleExecutionFundingReason, persistSafeStackText, PERSISTED_SAFE_STACK_STORAGE_KEY, readPersistedSafeStackText, resizeTextareaToContent, shouldInvalidateExecutionVerification } from '../src/app/uiState.js'
 
 const availableSignature = {

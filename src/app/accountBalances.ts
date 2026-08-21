@@ -3,7 +3,7 @@ import { getBalanceToken, getNativeAssetIdentity } from './addressRegistry.js'
 import { getNativeAssetSymbol } from './assetFormatting.js'
 import { readTokenBalance } from './contractMetadata.js'
 import { addressString } from './ethereum.js'
-import type { InjectedProvider } from './safeStackValidation.js'
+import type { InjectedProvider } from './provider.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 
 export type AssetBalance =

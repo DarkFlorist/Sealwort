@@ -2,7 +2,7 @@ import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { createJsonRpcProvider, getSafeReadProvider } from '../src/app/readProvider.js'
 import { DEFAULT_ETHEREUM_RPC_URL } from '../src/app/rpcSettings.js'
-import type { InjectedProvider } from '../src/app/safeStackValidation.js'
+import type { InjectedProvider } from '../src/app/provider.js'
 
 function jsonResponse(value: unknown, status = 200) {
 	return new Response(JSON.stringify(value), {

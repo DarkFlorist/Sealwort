@@ -3,7 +3,7 @@ import { signal, type Signal } from '@preact/signals'
 import { afterEach, describe, test } from 'bun:test'
 import { cleanup, render, screen, waitFor } from '@testing-library/preact'
 import type { SubmittedExecution, TransactionActionError } from '../src/app/appTypes.js'
-import type { InjectedProvider } from '../src/app/safeStackValidation.js'
+import type { InjectedProvider } from '../src/app/provider.js'
 import { type ReceiptPollingOptions, useSubmittedExecutionReceipts } from '../src/app/useSubmittedExecutionReceipts.js'
 
 const transactionHash = `0x${ '1'.repeat(64) }`

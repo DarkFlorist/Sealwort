@@ -1,7 +1,8 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
+import type { InjectedProvider } from './provider.js'
 import { SafeStackExport } from './safeStackProtocol.js'
-import { type InjectedProvider, type VerifiedSafeState, parseSafeStackText, validateSafeStackAtCurrentNonce, validateStackFile } from './safeStackValidation.js'
+import { type VerifiedSafeState, parseSafeStackText, validateSafeStackAtCurrentNonce, validateStackFile } from './safeStackValidation.js'
 import { isCurrentStackOperation } from './stackOperationState.js'
 import { getUserFacingErrorMessage, readSafeStackFile } from './userFacingErrors.js'
 import { getAutomaticStackVerificationAction, getSafeStackTextAction, persistSafeStackText, readPersistedSafeStackText, resizeTextareaToContent, SAFE_STACK_PERSISTENCE_WARNING, type SafeStackStorage } from './uiState.js'
@@ -19,6 +20,7 @@ import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
+import { ChainDiscoveryUnavailableError } from './chainDiscoveryError.js'
 import { RpcSettings } from './components/RpcSettings.js'
 import { persistEthereumRpcUrl, readPersistedEthereumRpcUrl, validateEthereumRpcUrl } from './rpcSettings.js'
 import { useTransactionDataMetadata } from './useTransactionDataMetadata.js'
@@ -105,16 +107,33 @@ export function App({
 		return await validateSafeStackAtCurrentNonce(provider, loadedStack)
 	}
 
+	const loadWalletIdentity = async (
+		provider: InjectedProvider,
+		operationRevision: number,
+		requestAccess: boolean,
+		reportUnavailable: boolean,
+	) => {
+		try {
+			return await loadWallet(provider, operationRevision, requestAccess)
+		} catch (walletLoadError) {
+			if (!(walletLoadError instanceof ChainDiscoveryUnavailableError) || walletLoadError.context !== 'wallet-connection') throw walletLoadError
+			if (!isCurrentWalletOperation(operationRevision)) return undefined
+			if (reportUnavailable) throw walletLoadError
+			return undefined
+		}
+	}
+
 	const refreshWalletAndStack = async (
 		provider: InjectedProvider,
 		operationRevision: number,
+		manual: boolean,
 	) => {
 		error.value = undefined
-		const walletIdentity = await loadWallet(provider, operationRevision, false)
+		const walletIdentity = await loadWalletIdentity(provider, operationRevision, false, manual)
 		if (walletIdentity === undefined) return
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
-		const verificationAction = getAutomaticStackVerificationAction(loadedStack !== undefined, walletIdentity.account)
+		const verificationAction = getAutomaticStackVerificationAction(loadedStack !== undefined, walletIdentity.status === 'connected' ? walletIdentity.account : undefined)
 		if (verificationAction === 'no-stack') return
 		if (verificationAction === 'await-account') {
 			verifiedSafeStates.value = []
@@ -152,7 +171,7 @@ export function App({
 		stackVerificationLoading.value = loadedStack !== undefined
 		try {
 			await Promise.all([
-				refreshWalletAndStack(requestProvider, walletRefreshRevision),
+				refreshWalletAndStack(requestProvider, walletRefreshRevision, manual),
 				loadedStack === undefined ? Promise.resolve() : refreshSafeInformation(loadedStack, refreshRevision),
 			])
 		} catch (providerError) {
@@ -215,8 +234,9 @@ export function App({
 		try {
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
-			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
+			const walletIdentity = await loadWalletIdentity(provider, connectWalletRevision, true, true)
 			if (walletIdentity === undefined) return
+			if (walletIdentity.status === 'disconnected') return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()

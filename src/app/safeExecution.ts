@@ -1,9 +1,9 @@
 import * as funtypes from 'funtypes'
 import { concatBytes } from '@noble/hashes/utils'
 import { addressString, bytesFromHex, bytesToHex, ensureHex, type Hex } from './ethereum.js'
+import type { InjectedProvider } from './provider.js'
 import { normalizeSafeSignature } from './safeProtocol.js'
 import type { SafeStackTransaction, SafeTx } from './safeStackProtocol.js'
-import type { InjectedProvider } from './safeStackValidation.js'
 import { ABI_WORD_BYTES, addressWord, encodeDynamicBytes, uint256Word } from './abiEncoding.js'
 
 const EXEC_TRANSACTION_SELECTOR = bytesFromHex('0x6a761202')

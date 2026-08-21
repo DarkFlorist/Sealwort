@@ -1,7 +1,21 @@
-import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js'
+import type { InjectedProvider, ProviderRequest } from './provider.js'
 
 export const DEFAULT_WALLET_REQUEST_TIMEOUT_MS = 15_000
 export const INTERACTIVE_WALLET_REQUEST_TIMEOUT_MS = 120_000
+
+export class WalletRequestTimeoutError extends Error {
+	readonly method: string
+
+	constructor(method: string) {
+		super(getWalletRequestTimeoutMessage(method))
+		this.name = 'WalletRequestTimeoutError'
+		this.method = method
+	}
+}
+
+export function isWalletRequestTimeoutError(error: unknown, method?: string): error is WalletRequestTimeoutError {
+	return error instanceof WalletRequestTimeoutError && (method === undefined || error.method === method)
+}
 
 function requiresUnlimitedReviewTime(method: string) {
 	return method === 'eth_sendTransaction'
@@ -38,7 +52,7 @@ export function withWalletRequestTimeout(
 				return await Promise.race([
 					Promise.resolve().then(async () => await provider.request(request)),
 					new Promise<never>((_resolve, reject) => {
-						timeout = globalThis.setTimeout(() => reject(new Error(getWalletRequestTimeoutMessage(request.method))), requestTimeoutMs)
+						timeout = globalThis.setTimeout(() => reject(new WalletRequestTimeoutError(request.method)), requestTimeoutMs)
 					}),
 				])
 			} finally {

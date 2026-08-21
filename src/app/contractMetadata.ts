@@ -2,7 +2,7 @@ import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { ERC721_INTERFACE_ID } from './abis/erc721Interface.js'
 import { TOKEN_METADATA_ABI } from './abis/tokenMetadata.js'
 import { addressString, bytesFromHex, bytesToHex, ensureHex } from './ethereum.js'
-import type { InjectedProvider } from './safeStackValidation.js'
+import type { InjectedProvider } from './provider.js'
 
 const TokenMetadataContract = createContract(TOKEN_METADATA_ABI)
 
