@@ -209,7 +209,7 @@ describe('Sealwort app wallet workflows', () => {
 		assert.notEqual(screen.getByText('RPC endpoint saved.'), undefined)
 	})
 
-	test('rejects a non-loopback HTTP Ethereum RPC', () => {
+	test('persists an HTTP Ethereum RPC', () => {
 		render(<App />)
 
 		fireEvent.click(screen.getByText('RPC settings'))
@@ -217,9 +217,8 @@ describe('Sealwort app wallet workflows', () => {
 		fireEvent.input(rpcUrlInput, { target: { value: 'http://rpc.example.test' } })
 		fireEvent.submit(screen.getByRole('button', { name: 'Save' }).closest('form') as HTMLFormElement)
 
-		assert.notEqual(screen.getByRole('alert').textContent, undefined)
-		assert.equal(screen.getByRole('alert').textContent, 'The Ethereum RPC URL must use HTTPS, except for HTTP loopback addresses.')
-		assert.equal(window.localStorage.getItem(PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY), null)
+		assert.equal(window.localStorage.getItem(PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY), 'http://rpc.example.test')
+		assert.notEqual(screen.getByText('RPC endpoint saved.'), undefined)
 	})
 
 	test('refreshes the rendered connected account when the provider advertises an account change', async () => {

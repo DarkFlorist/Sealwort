@@ -23,8 +23,8 @@ their signature threshold.
 ![Sealwort displaying a newly signed Gnosis Safe stack](docs/sealwort-signed.png)
 
 Sealwort reads current Safe information through the injected wallet when it is on
-the stack's chain. For Ethereum mainnet stacks, it falls back to the HTTPS endpoint
-selected in RPC settings when no matching injected provider is available. The
+the stack's chain. For Ethereum mainnet stacks, it falls back to the HTTP or HTTPS
+endpoint selected in RPC settings when no matching injected provider is available. The
 default is `https://ethereum.dark.florist`, and a custom choice is preserved in
 local browser storage. Using the fallback discloses the imported Safe address to
 that RPC. Signing always requires an injected owner wallet and never uses the
@@ -82,14 +82,13 @@ These checks are repeated immediately before the wallet request.
   delegatecalls, duplicate signatures, and altered transaction lists.
 - Includes framing protection through both response headers and a fail-closed
   top-level runtime check.
-- Accepts HTTPS custom RPC endpoints and HTTP loopback endpoints on `localhost`,
-  `127.0.0.1`, or `[::1]`, without embedded credentials or URL fragments. The CSP
-  permits HTTPS and those HTTP loopback connections so a static deployment can
-  reach the endpoint selected by the user at runtime. A response or meta CSP
+- Accepts HTTP and HTTPS custom RPC endpoints without embedded credentials or URL
+  fragments. The CSP uses `connect-src *` so a static deployment can reach the
+  endpoint selected by the user at runtime. A response or meta CSP
   cannot be expanded after delivery, so a static build cannot add only a
   browser-stored custom host to the original single-origin allowlist.
 - Explicitly accepts that configurable RPC hosts broaden `connect-src` from one
-  origin to HTTPS origins and explicit HTTP loopback origins. Compensating controls
+  origin to arbitrary network origins. Compensating controls
   include the strict runtime Safe Stack schema, Preact text escaping for imported
   and provider-controlled values, no raw-HTML or dynamic-code rendering paths, and
   the remaining restrictive CSP directives (`default-src 'none'`, same-origin

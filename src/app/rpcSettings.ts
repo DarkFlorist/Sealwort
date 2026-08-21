@@ -3,10 +3,6 @@ export const PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY = 'sealwort.ethereum-rpc-url
 
 export type RpcSettingsStorage = Pick<Storage, 'getItem' | 'removeItem' | 'setItem'>
 
-function isLoopbackHostname(hostname: string) {
-	return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
-}
-
 export function validateEthereumRpcUrl(value: string) {
 	const trimmedValue = value.trim()
 	let parsed: URL
@@ -16,8 +12,8 @@ export function validateEthereumRpcUrl(value: string) {
 		throw new Error('Enter a valid Ethereum RPC URL.')
 	}
 	if (parsed.host.length === 0) throw new Error('The Ethereum RPC URL must include a host.')
-	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHostname(parsed.hostname))) {
-		throw new Error('The Ethereum RPC URL must use HTTPS, except for HTTP loopback addresses.')
+	if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+		throw new Error('The Ethereum RPC URL must use HTTP or HTTPS.')
 	}
 	if (parsed.username.length !== 0 || parsed.password.length !== 0) {
 		throw new Error('The Ethereum RPC URL must not contain embedded credentials.')

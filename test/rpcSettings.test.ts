@@ -28,15 +28,14 @@ describe('Ethereum RPC settings', () => {
 		assert.equal(getEthereumRpcHost('https://rpc.example.test/private-key?token=secret'), 'rpc.example.test')
 	})
 
-	test('accepts HTTPS and HTTP loopback endpoints while rejecting unsafe or ambiguous URLs', () => {
+	test('accepts HTTP and HTTPS endpoints while rejecting unsafe or ambiguous URLs', () => {
 		assert.equal(validateEthereumRpcUrl('  https://rpc.example.test/v1/key  '), 'https://rpc.example.test/v1/key')
 		assert.equal(validateEthereumRpcUrl('http://localhost:8545'), 'http://localhost:8545')
-		assert.equal(validateEthereumRpcUrl('http://127.0.0.1:8545'), 'http://127.0.0.1:8545')
-		assert.equal(validateEthereumRpcUrl('http://[::1]:8545'), 'http://[::1]:8545')
+		assert.equal(validateEthereumRpcUrl('http://rpc.example.test'), 'http://rpc.example.test')
+		assert.equal(validateEthereumRpcUrl('http://192.168.1.10:8545'), 'http://192.168.1.10:8545')
 		assert.throws(() => validateEthereumRpcUrl('https://?token=abc'), /valid Ethereum RPC URL|include a host/u)
 		assert.throws(() => validateEthereumRpcUrl('https://:443'), /valid Ethereum RPC URL|include a host/u)
-		assert.throws(() => validateEthereumRpcUrl('http://rpc.example.test'), /HTTPS.*HTTP loopback/u)
-		assert.throws(() => validateEthereumRpcUrl('http://192.168.1.10:8545'), /HTTPS.*HTTP loopback/u)
+		assert.throws(() => validateEthereumRpcUrl('ws://rpc.example.test'), /HTTP or HTTPS/u)
 		assert.throws(() => validateEthereumRpcUrl('https://user:secret@rpc.example.test'), /embedded credentials/u)
 		assert.throws(() => validateEthereumRpcUrl('https://rpc.example.test/#configuration'), /fragment/u)
 		assert.throws(() => validateEthereumRpcUrl('not a URL'), /valid Ethereum RPC URL/u)
