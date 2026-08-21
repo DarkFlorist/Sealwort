@@ -17,7 +17,7 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { isWalletChainDiscoveryTimeout, withWalletRequestTimeout } from './walletProvider.js'
+import { getWalletRequestFailurePolicy, withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -110,9 +110,10 @@ export function App({
 		try {
 			return await loadWallet(provider, operationRevision, requestAccess)
 		} catch (walletLoadError) {
-			if (!isWalletChainDiscoveryTimeout(walletLoadError)) throw walletLoadError
+			const failurePolicy = getWalletRequestFailurePolicy(walletLoadError)
+			if (failurePolicy === undefined) throw walletLoadError
 			if (!isCurrentWalletOperation(operationRevision)) return undefined
-			if (reportUnavailable) throw walletLoadError
+			if (reportUnavailable || !failurePolicy.suppressDuringPassiveConnection) throw walletLoadError
 			return undefined
 		}
 	}

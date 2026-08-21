@@ -17,8 +17,18 @@ export function isWalletRequestTimeoutError(error: unknown, method?: string): er
 	return error instanceof WalletRequestTimeoutError && (method === undefined || error.method === method)
 }
 
-export function isWalletChainDiscoveryTimeout(error: unknown) {
-	return isWalletRequestTimeoutError(error, 'eth_chainId')
+export type WalletRequestFailurePolicy = {
+	readonly suppressDuringPassiveConnection: boolean
+	readonly userMessage: string
+}
+
+const CHAIN_DISCOVERY_TIMEOUT_POLICY: WalletRequestFailurePolicy = {
+	suppressDuringPassiveConnection: true,
+	userMessage: 'The wallet connection could not be completed. Try connecting again.',
+}
+
+export function getWalletRequestFailurePolicy(error: unknown): WalletRequestFailurePolicy | undefined {
+	return isWalletRequestTimeoutError(error, 'eth_chainId') ? CHAIN_DISCOVERY_TIMEOUT_POLICY : undefined
 }
 
 function requiresUnlimitedReviewTime(method: string) {
