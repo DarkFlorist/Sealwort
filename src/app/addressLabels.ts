@@ -20,5 +20,5 @@ export function getAddressLabel(address: bigint, chainId: bigint, connectedAccou
 export function identifiedAddress(address: bigint, chainId: bigint, connectedAccount?: bigint) {
 	const formatted = checksummedAddress(address)
 	const label = getAddressLabel(address, chainId, connectedAccount)
-	return label === undefined ? formatted : `${ formatted }(${ label })`
+	return label === undefined ? formatted : `${ formatted } (${ label })`
 }
