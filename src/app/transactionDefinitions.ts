@@ -7,7 +7,7 @@ import { KYBER_NETWORK_PROXY_ABI } from './abis/kyberNetworkProxy.js'
 import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
 import { UNISWAP_V2_ROUTER_ABI } from './abis/uniswapV2Router.js'
 import { UNISWAP_V3_ROUTER_ABI } from './abis/uniswapV3Router.js'
-import { MAINNET_TRANSACTION_CONTRACTS, type RegisteredTransactionContract } from './addressRegistry.js'
+import { ETHEREUM_MAINNET_CHAIN_ID, getRegisteredTransactionContracts, type RegisteredTransactionContract } from './addressRegistry.js'
 
 export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
 export type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: 'first' | 'last' }
@@ -37,6 +37,10 @@ function deployedDefinition(deployment: RegisteredTransactionContract, abi: Cont
 	return { abi, functions, deployment }
 }
 
+function unreachableDeployment(_deployment: never): never {
+	throw new Error('No transaction interpretation exists for the registered contract.')
+}
+
 const uniswapV2Rules = [
 	functionRule(['addLiquidity'], { amountADesired: field('tokenA'), amountAMin: field('tokenA'), amountBDesired: field('tokenB'), amountBMin: field('tokenB') }),
 	functionRule(['addLiquidityETH'], { amountTokenDesired: field('token'), amountTokenMin: field('token'), amountETHMin: 'native' }),
@@ -60,14 +64,17 @@ const uniswapV3Rules = [
 	functionRule(['exactOutputSingle'], { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') }),
 ] as const
 
-// Each deployed decoder directly binds the lightweight label/address object to its
-// app-owned ABI and semantics. The registry synchronization test enforces coverage.
-const MAINNET_TRANSACTION_DEFINITIONS = [
-	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router, UNISWAP_V2_ROUTER_ABI, uniswapV2Rules),
-	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router, UNISWAP_V3_ROUTER_ABI, uniswapV3Rules),
-	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.kyberNetworkProxy, KYBER_NETWORK_PROXY_ABI, [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })]),
-	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.metaMaskSwapRouter, METAMASK_SWAP_ROUTER_ABI, [functionRule(['swap'], { amount: field('tokenFrom') })]),
-] as const
+function deployedDefinitionFor(deployment: RegisteredTransactionContract): TransactionDefinition {
+	switch (deployment.decoder) {
+		case 'uniswapV2Router': return deployedDefinition(deployment, UNISWAP_V2_ROUTER_ABI, uniswapV2Rules)
+		case 'uniswapV3Router': return deployedDefinition(deployment, UNISWAP_V3_ROUTER_ABI, uniswapV3Rules)
+		case 'kyberNetworkProxy': return deployedDefinition(deployment, KYBER_NETWORK_PROXY_ABI, [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })])
+		case 'metaMaskSwapRouter': return deployedDefinition(deployment, METAMASK_SWAP_ROUTER_ABI, [functionRule(['swap'], { amount: field('tokenFrom') })])
+		default: return unreachableDeployment(deployment)
+	}
+}
+
+const MAINNET_TRANSACTION_DEFINITIONS = getRegisteredTransactionContracts(ETHEREUM_MAINNET_CHAIN_ID).map(deployedDefinitionFor)
 
 export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 	{ abi: ERC20, functions: [functionRule(['transfer', 'approve', 'transferFrom'], { value: 'destination' })] },

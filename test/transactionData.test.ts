@@ -15,7 +15,6 @@ import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
 import { UNISWAP_V2_ROUTER_ABI } from '../src/app/abis/uniswapV2Router.js'
 import { UNISWAP_V3_ROUTER_ABI } from '../src/app/abis/uniswapV3Router.js'
 import { getBalanceToken, getRegisteredTokens, getRegisteredTransactionContracts, MAINNET_TRANSACTION_CONTRACTS } from '../src/app/addressRegistry.js'
-import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
 import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
 import { TRANSACTION_DEFINITIONS } from '../src/app/transactionDefinitions.js'
 
@@ -139,9 +138,10 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('decodes every function in the address-bound router ABIs', () => {
-		for (const [address, abi] of Object.entries(MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS)) {
+		for (const { abi, deployment } of TRANSACTION_DEFINITIONS.filter(({ deployment }) => deployment !== undefined)) {
+			const address = deployment!.address
 			for (const { name, data } of encodedFunctionCalls(abi)) {
-				const decoded = decodeTransactionData(1n, BigInt(address), data)
+				const decoded = decodeTransactionData(1n, address, data)
 				assert.equal(decoded.status, 'decoded', `${ name } at ${ address }`)
 			}
 		}
@@ -243,7 +243,7 @@ describe('transaction calldata parsing', () => {
 		assert.equal(getAddressLabel(sepoliaUsdc.address, 11155111n), sepoliaUsdc.label)
 	})
 
-	test('keeps registered transaction contracts synchronized with decoder definitions', () => {
+	test('binds every registered transaction contract to an app-owned decoder definition', () => {
 		const registered = getRegisteredTransactionContracts(1n)
 		const deployedDefinitions = TRANSACTION_DEFINITIONS.filter(({ deployment }) => deployment !== undefined)
 		assert.deepEqual(deployedDefinitions.map(({ deployment }) => deployment!.address).sort(), registered.map(({ address }) => address).sort())

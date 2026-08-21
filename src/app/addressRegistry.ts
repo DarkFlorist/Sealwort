@@ -8,33 +8,35 @@ export type RegisteredToken = {
 	readonly label: string
 }
 
-export type RegisteredTransactionContract = {
-	readonly chainId: bigint
-	readonly address: bigint
-	readonly label: string
-}
-
 type NativeAssetIdentity = { readonly symbol: string, readonly label: string }
 type BalanceTokenRegistry = { readonly usdc?: RegisteredToken }
+
+const token = (address: bigint, symbol: string, label: string): RegisteredToken => ({ address, symbol, label })
+
+function transactionContracts<const Definitions extends Readonly<Record<string, { readonly address: bigint, readonly label: string }>>>(definitions: Definitions) {
+	return Object.fromEntries(Object.entries(definitions).map(([decoder, identity]) => [decoder, { decoder, chainId: ETHEREUM_MAINNET_CHAIN_ID, ...identity }])) as {
+		readonly [Decoder in keyof Definitions]: { readonly decoder: Decoder, readonly chainId: typeof ETHEREUM_MAINNET_CHAIN_ID } & Definitions[Decoder]
+	}
+}
+
+const MAINNET_USDC = token(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, 'USDC', 'USDC')
+const SEPOLIA_USDC = token(0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n, 'USDC', 'USDC')
+
+export const MAINNET_TRANSACTION_CONTRACTS = transactionContracts({
+	uniswapV2Router: { address: 0x7a250d5630b4cf539739df2c5dacb4c659f2488dn, label: 'Uniswap V2 Router' },
+	uniswapV3Router: { address: 0xe592427a0aece92de3edee1f18e0157c05861564n, label: 'Uniswap V3 Router' },
+	kyberNetworkProxy: { address: 0x9aab3f75489902f3a48495025729a0af77d4b11en, label: 'Kyber Network Proxy' },
+	metaMaskSwapRouter: { address: 0x881d40237659c251811cec9c364ef91dc08d300cn, label: 'MetaMask Swap Router' },
+})
+
+export type RegisteredTransactionContract = (typeof MAINNET_TRANSACTION_CONTRACTS)[keyof typeof MAINNET_TRANSACTION_CONTRACTS]
+
 type ChainAddressRegistry = {
 	readonly nativeAsset: NativeAssetIdentity
 	readonly tokens: Readonly<Record<string, RegisteredToken>>
 	readonly transactionContracts: Readonly<Record<string, RegisteredTransactionContract>>
 	readonly balanceTokens: BalanceTokenRegistry
 }
-
-const token = (address: bigint, symbol: string, label: string): RegisteredToken => ({ address, symbol, label })
-const transactionContract = (address: bigint, label: string): RegisteredTransactionContract => ({ chainId: ETHEREUM_MAINNET_CHAIN_ID, address, label })
-
-const MAINNET_USDC = token(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, 'USDC', 'USDC')
-const SEPOLIA_USDC = token(0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n, 'USDC', 'USDC')
-
-export const MAINNET_TRANSACTION_CONTRACTS = {
-	uniswapV2Router: transactionContract(0x7a250d5630b4cf539739df2c5dacb4c659f2488dn, 'Uniswap V2 Router'),
-	uniswapV3Router: transactionContract(0xe592427a0aece92de3edee1f18e0157c05861564n, 'Uniswap V3 Router'),
-	kyberNetworkProxy: transactionContract(0x9aab3f75489902f3a48495025729a0af77d4b11en, 'Kyber Network Proxy'),
-	metaMaskSwapRouter: transactionContract(0x881d40237659c251811cec9c364ef91dc08d300cn, 'MetaMask Swap Router'),
-} as const satisfies Readonly<Record<string, RegisteredTransactionContract>>
 
 const CHAIN_ADDRESS_REGISTRIES: Readonly<Record<string, ChainAddressRegistry>> = {
 	[ETHEREUM_MAINNET_CHAIN_ID.toString()]: {
