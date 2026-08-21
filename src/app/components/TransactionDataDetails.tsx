@@ -4,7 +4,7 @@ import { getNativeAssetSymbol } from '../assetFormatting.js'
 import { getAddressLabel, identifiedAddress } from '../addressLabels.js'
 import { decodedArguments, rawTransactionData } from '../transactionDecoder.js'
 import { formatDecodedValue, formatTokenAmount } from '../transactionFormatting.js'
-import { amountTokenForArgument, argumentLabel, decodedAddress, isDecodedRecord, resolveTokenAddress, tokenMetadataKey, type AmountTokenReference } from '../transactionSemantics.js'
+import { amountTokenForArgument, argumentLabel, decodedAddress, isDecodedRecord, resolveTokenAddress, tokenMetadataKey, transactionNeedsErc721Resolution, transactionValuePresentation, type AmountTokenReference } from '../transactionSemantics.js'
 import { useTransactionDataMetadata } from '../useTransactionDataMetadata.js'
 
 function displayDecodedValue(value: unknown, chainId: bigint, connectedAccount: bigint | undefined): string {
@@ -26,6 +26,7 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 	const [showParsed, setShowParsed] = useState(true)
 	const { decoded, metadata } = useTransactionDataMetadata(destination, data, chainId, walletRequestTimeoutMs)
 	const raw = rawTransactionData(data)
+	const callValuePresentation = decoded.status === 'decoded' ? transactionValuePresentation(decoded.call) : undefined
 
 	const renderAmount = (value: bigint, reference: AmountTokenReference) => {
 		const address = resolveTokenAddress(reference, destination, metadata.status === 'ready' ? metadata.vaultAsset : undefined)
@@ -56,7 +57,7 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 			const reference = typeof value === 'bigint' && decoded.status === 'decoded' ? amountTokenForArgument(decoded.call, name, scope) : undefined
 			const address = reference === undefined ? undefined : resolveTokenAddress(reference, destination, metadata.status === 'ready' ? metadata.vaultAsset : undefined)
 			const nft = typeof address === 'bigint' && metadata.status === 'ready' && metadata.tokens[tokenMetadataKey(address)]?.status === 'nft'
-			return <><dt key = { `${ prefix }:${ name }:label` }>{ argumentLabel(decoded.status === 'decoded' ? decoded.call.signature : '', name.replace(/^_/u, ''), nft) }</dt><dd key = { `${ prefix }:${ name }` } class = { decodedAddress(value) === undefined ? undefined : 'address' }>{ renderValue(name, value, scope, `${ prefix }:${ name }`) }</dd></>
+			return <><dt key = { `${ prefix }:${ name }:label` }>{ argumentLabel(name.replace(/^_/u, ''), nft) }</dt><dd key = { `${ prefix }:${ name }` } class = { decodedAddress(value) === undefined ? undefined : 'address' }>{ renderValue(name, value, scope, `${ prefix }:${ name }`) }</dd></>
 		})
 	}
 
@@ -75,8 +76,8 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 						: <div class = 'decoded-call'>
 							<strong>{ decoded.call.name }</strong>
 							{ metadata.status === 'failed' ? <div class = 'data-parse-error'>{ metadata.message }</div> : <></> }
-							{ decoded.call.signature === 'deposit()' ? <dl><dt>Amount</dt><dd>{ formatTokenAmount(transactionValue, 18, getAddressLabel(destination, chainId) ?? 'WETH') }</dd></dl> : <></> }
-							{ decoded.call.ambiguity !== undefined ? <span class = 'muted'>Identifying transfer…</span> : decodedArguments(decoded.call).length === 0 ? <></> : Array.isArray(decoded.call.arguments)
+							{ callValuePresentation === undefined ? <></> : <dl><dt>{ callValuePresentation.label }</dt><dd>{ formatTokenAmount(transactionValue, callValuePresentation.decimals, getAddressLabel(destination, chainId) ?? callValuePresentation.fallbackSymbol) }</dd></dl> }
+							{ transactionNeedsErc721Resolution(decoded) ? <span class = 'muted'>Identifying transfer…</span> : decodedArguments(decoded.call).length === 0 ? <></> : Array.isArray(decoded.call.arguments)
 				? <div class = 'decoded-nested'>{ decoded.call.arguments.map((value, index) => isDecodedRecord(value) ? <dl key = { index }>{ renderFields(value, `argument:${ index }`) }</dl> : <div key = { index }>{ displayDecodedValue(value, chainId, connectedAccount) }</div>) }</div>
 								: <dl>{ renderFields(decoded.call.arguments as Readonly<Record<string, unknown>>, 'argument') }</dl> }
 						</div>

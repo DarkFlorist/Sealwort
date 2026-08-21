@@ -1,7 +1,7 @@
-const ETHEREUM_SEPOLIA_CHAIN_ID = 11155111n
+import { getChainConfiguration } from './chainConfiguration.js'
 
 export function getNativeAssetSymbol(chainId: bigint) {
-	return chainId === ETHEREUM_SEPOLIA_CHAIN_ID ? 'SepoliaETH' : 'ETH'
+	return getChainConfiguration(chainId).nativeSymbol
 }
 
 export function formatTokenBalance(value: bigint, decimals: number, maximumFractionDigits = 6) {

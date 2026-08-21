@@ -2,8 +2,8 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { isContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from './contractMetadata.js'
 import { getSafeReadProvider } from './readProvider.js'
-import { decodeTransactionData, rawTransactionData, resolveAmbiguousSafeTransfer, type TransactionDataDecodeResult } from './transactionDecoder.js'
-import { amountTokenReferences, tokenMetadataKey } from './transactionSemantics.js'
+import { decodeTransactionData, rawTransactionData, type TransactionDataDecodeResult } from './transactionDecoder.js'
+import { amountTokenReferences, resolveTransactionInterpretation, tokenMetadataKey, transactionNeedsErc721Resolution } from './transactionSemantics.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 
@@ -31,7 +31,7 @@ async function loadMetadata(
 	if (initialDecoded.status !== 'decoded') return { decoded: initialDecoded, metadata: { status: 'idle' } }
 	let decoded = initialDecoded
 	let references = amountTokenReferences(decoded.call)
-	const needsProvider = decoded.call.ambiguity !== undefined
+	const needsProvider = transactionNeedsErc721Resolution(decoded)
 		|| references.some((reference) => reference !== 'native' && reference !== 'liquidity')
 	if (!needsProvider) return { decoded, metadata: { status: 'idle' } }
 
@@ -39,13 +39,12 @@ async function loadMetadata(
 	const readProvider = await getSafeReadProvider(chainId, injectedProvider)
 	const provider = withWalletRequestTimeout(readProvider.provider, walletRequestTimeoutMs)
 
-	if (decoded.call.ambiguity === 'erc721-or-token-helper') {
+	if (transactionNeedsErc721Resolution(decoded)) {
 		const interfaceResult = await settle(readIsErc721(provider, destination))
 		if (interfaceResult.status === 'rejected' && !isContractMetadataUnavailableError(interfaceResult.reason)) throw interfaceResult.reason
-		decoded = {
-			status: 'decoded',
-			call: resolveAmbiguousSafeTransfer(decoded.call, interfaceResult.status === 'fulfilled' && interfaceResult.value ? 'erc721' : 'token-helper'),
-		}
+		const resolved = resolveTransactionInterpretation(decoded, interfaceResult.status === 'fulfilled' && interfaceResult.value)
+		if (resolved.status !== 'decoded') throw new Error('Resolved transaction data unexpectedly became unavailable.')
+		decoded = resolved
 		references = amountTokenReferences(decoded.call)
 	}
 
@@ -87,7 +86,7 @@ export function useTransactionDataMetadata(
 	walletRequestTimeoutMs?: number,
 ) {
 	const key = `${ chainId.toString() }:${ destination.toString() }:${ rawTransactionData(data) }`
-	const initialDecoded = decodeTransactionData(destination, data)
+	const initialDecoded = decodeTransactionData(chainId, destination, data)
 	const state = useSignal<{ readonly key: string, readonly result: MetadataResult }>({ key, result: { decoded: initialDecoded, metadata: { status: 'loading' } } })
 
 	useEffect(() => {

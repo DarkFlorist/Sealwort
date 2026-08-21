@@ -1,14 +1,10 @@
 import * as funtypes from 'funtypes'
 import { getNativeAssetSymbol } from './assetFormatting.js'
+import { getChainConfiguration } from './chainConfiguration.js'
 import { readTokenBalance } from './contractMetadata.js'
 import { addressString } from './ethereum.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
-
-const ETHEREUM_MAINNET_CHAIN_ID = 1n
-const ETHEREUM_SEPOLIA_CHAIN_ID = 11155111n
-const MAINNET_USDC_ADDRESS = 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n
-const SEPOLIA_USDC_ADDRESS = 0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n
 
 export type AssetBalance =
 	| { readonly status: 'available', readonly value: bigint }
@@ -45,20 +41,10 @@ type ChainBalanceConfiguration = {
 }
 
 function getChainBalanceConfiguration(chainId: bigint): ChainBalanceConfiguration {
-	switch (chainId) {
-		case ETHEREUM_MAINNET_CHAIN_ID:
-			return {
-				nativeSymbol: getNativeAssetSymbol(chainId),
-				usdc: { symbol: 'USDC', address: MAINNET_USDC_ADDRESS },
-			}
-		case ETHEREUM_SEPOLIA_CHAIN_ID:
-			return {
-				nativeSymbol: getNativeAssetSymbol(chainId),
-				usdc: { symbol: 'SepoliaUSDC', address: SEPOLIA_USDC_ADDRESS },
-			}
-		default:
-			return { nativeSymbol: getNativeAssetSymbol(chainId) }
-	}
+	const configuration = getChainConfiguration(chainId)
+	return configuration.balanceTokens === undefined
+		? { nativeSymbol: configuration.nativeSymbol }
+		: { nativeSymbol: configuration.nativeSymbol, usdc: configuration.balanceTokens.usdc }
 }
 
 function parseEthereumQuantity(value: unknown, label: string) {

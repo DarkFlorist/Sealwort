@@ -3,15 +3,15 @@ import { describe, test } from 'bun:test'
 import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, TOKENS, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
 import { ContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/contractMetadata.js'
-import { decodeTransactionData, resolveAmbiguousSafeTransfer } from '../src/app/transactionDecoder.js'
-import { amountTokenForArgument, amountTokenReferences } from '../src/app/transactionSemantics.js'
+import { decodeTransactionData } from '../src/app/transactionDecoder.js'
+import { amountTokenForArgument, amountTokenReferences, resolveTransactionInterpretation, transactionNeedsErc721Resolution, transactionValuePresentation } from '../src/app/transactionSemantics.js'
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { ERC7540_ABI } from '../src/app/abis/erc7540.js'
 import { ERC721_SAFE_TRANSFER_WITH_DATA_ABI } from '../src/app/abis/erc721.js'
-import { METAMASK_SWAP_ROUTER_ABI, METAMASK_SWAP_ROUTER_ADDRESS } from '../src/app/abis/metaMaskSwapRouter.js'
-import { ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/abis/transaction.js'
+import { MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
+import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/abis/transaction.js'
 
 const destination = 0x1234n
 const firstAddress = '0x0000000000000000000000000000000000001111'
@@ -66,7 +66,7 @@ describe('transaction calldata parsing', () => {
 			createContract(WETH).deposit.encodeInput(),
 		]
 		assert.deepEqual(calls.map((data) => {
-			const result = decodeTransactionData(destination, data)
+			const result = decodeTransactionData(1n, destination, data)
 			return result.status === 'decoded' ? result.call.name : result.status
 		}), ['transfer', 'safeTransferFrom', 'safeTransferFrom', 'deposit'])
 	})
@@ -89,20 +89,23 @@ describe('transaction calldata parsing', () => {
 			contract.transferFromWithReferenceAndFee.encodeInput({ _tokenAddress: tokenAddress, _to: to, _amount: 2n, _paymentReference: new Uint8Array([1, 2]), _feeAmount: 1n, _feeAddress: feeAddress }),
 			contract.safeTransferFrom.encodeInput({ _tokenAddress: tokenAddress, _to: to, _amount: 2n }),
 		]
-		for (const data of calls) assert.equal(decodeTransactionData(destination, data).status, 'decoded')
-		const safeTransfer = decodeTransactionData(destination, calls[1]!)
-		assert.equal(safeTransfer.status === 'decoded' && safeTransfer.call.ambiguity, 'erc721-or-token-helper')
-		assert.equal(safeTransfer.status === 'decoded' && Object.hasOwn(resolveAmbiguousSafeTransfer(safeTransfer.call, 'token-helper').arguments ?? {}, '_tokenAddress'), true)
+		for (const data of calls) assert.equal(decodeTransactionData(1n, destination, data).status, 'decoded')
+		const safeTransfer = decodeTransactionData(1n, destination, calls[1]!)
+		assert.equal(transactionNeedsErc721Resolution(safeTransfer), true)
+		const resolved = resolveTransactionInterpretation(safeTransfer, false)
+		assert.equal(resolved.status === 'decoded' && Object.hasOwn(resolved.call.arguments ?? {}, '_tokenAddress'), true)
 	})
 
 	test('resolves the shared safeTransferFrom selector without depending on ABI order', () => {
 		const erc721 = createContract(ERC721) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const data = erc721['safeTransferFrom(address,address,uint256)']!.encodeInput({ from: firstAddress, to: secondAddress, tokenId: 42n })
-		const decoded = decodeTransactionData(destination, data)
+		const decoded = decodeTransactionData(1n, destination, data)
 		assert.equal(decoded.status, 'decoded')
 		if (decoded.status !== 'decoded') return
-		assert.deepEqual(resolveAmbiguousSafeTransfer(decoded.call, 'erc721').arguments, { from: firstAddress, to: secondAddress, tokenId: 42n })
-		assert.deepEqual(resolveAmbiguousSafeTransfer(decoded.call, 'token-helper').arguments, { _tokenAddress: firstAddress, _to: secondAddress, _amount: 42n })
+		const erc721Resolution = resolveTransactionInterpretation(decoded, true)
+		const helper = resolveTransactionInterpretation(decoded, false)
+		assert.deepEqual(erc721Resolution.status === 'decoded' ? erc721Resolution.call.arguments : undefined, { from: firstAddress, to: secondAddress, tokenId: 42n })
+		assert.deepEqual(helper.status === 'decoded' ? helper.call.arguments : undefined, { _tokenAddress: firstAddress, _to: secondAddress, _amount: 42n })
 	})
 
 	test('detects ERC-721 through ERC-165 when fungible decimals are absent', async () => {
@@ -111,9 +114,9 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('decodes every function in the address-bound router ABIs', () => {
-		for (const [address, abi] of Object.entries(ADDRESS_BOUND_TRANSACTION_ABIS)) {
+		for (const [address, abi] of Object.entries(MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS)) {
 			for (const { name, data } of encodedFunctionCalls(abi)) {
-				const decoded = decodeTransactionData(BigInt(address), data)
+				const decoded = decodeTransactionData(1n, BigInt(address), data)
 				assert.equal(decoded.status, 'decoded', `${ name } at ${ address }`)
 			}
 		}
@@ -122,7 +125,7 @@ describe('transaction calldata parsing', () => {
 	test('decodes ERC-2612, ERC-4626, and ERC-7540 calls at arbitrary destinations', () => {
 		for (const abi of [ERC2612_ABI, ERC4626_ABI, ERC7540_ABI]) {
 			for (const { name, data } of encodedFunctionCalls(abi)) {
-				const decoded = decodeTransactionData(destination, data)
+				const decoded = decodeTransactionData(1n, destination, data)
 				assert.equal(decoded.status, 'decoded', name)
 			}
 		}
@@ -132,28 +135,28 @@ describe('transaction calldata parsing', () => {
 		const v2Address = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'UNISWAP V2 ROUTER')?.[0]
 		assert.ok(v2Address !== undefined)
 		const v2 = createContract(CONTRACTS[v2Address]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
-		const swap = decodeTransactionData(BigInt(v2Address), v2.swapExactTokensForTokens!.encodeInput({ amountIn: 100n, amountOutMin: 90n, path: [firstAddress, secondAddress], to: secondAddress, deadline: 1n }))
+		const swap = decodeTransactionData(1n, BigInt(v2Address), v2.swapExactTokensForTokens!.encodeInput({ amountIn: 100n, amountOutMin: 90n, path: [firstAddress, secondAddress], to: secondAddress, deadline: 1n }))
 		assert.deepEqual(swap.status === 'decoded' ? amountTokenReferences(swap.call) : [], [BigInt(firstAddress), BigInt(secondAddress)])
 
 		const vault = createContract(ERC4626_ABI)
-		const deposit = decodeTransactionData(destination, vault.deposit.encodeInput({ assets: 100n, receiver: secondAddress }))
+		const deposit = decodeTransactionData(1n, destination, vault.deposit.encodeInput({ assets: 100n, receiver: secondAddress }))
 		assert.deepEqual(deposit.status === 'decoded' ? amountTokenReferences(deposit.call) : [], ['vaultAsset'])
-		const mint = decodeTransactionData(destination, vault.mint.encodeInput({ shares: 100n, receiver: secondAddress }))
+		const mint = decodeTransactionData(1n, destination, vault.mint.encodeInput({ shares: 100n, receiver: secondAddress }))
 		assert.deepEqual(mint.status === 'decoded' ? amountTokenReferences(mint.call) : [], ['destination'])
 
 		const permit = createContract(ERC2612_ABI).permit.encodeInput({ owner: firstAddress, spender: secondAddress, value: 100n, deadline: 1n, v: 1n, r: new Uint8Array(32), s: new Uint8Array(32) })
-		const decodedPermit = decodeTransactionData(destination, permit)
+		const decodedPermit = decodeTransactionData(1n, destination, permit)
 		assert.deepEqual(decodedPermit.status === 'decoded' ? amountTokenReferences(decodedPermit.call) : [], ['destination'])
 
 		const metaMask = createContract(METAMASK_SWAP_ROUTER_ABI).swap.encodeInput({ aggregatorId: 'test', tokenFrom: firstAddress, amount: 100n, data: new Uint8Array() })
-		const decodedMetaMask = decodeTransactionData(METAMASK_SWAP_ROUTER_ADDRESS, metaMask)
+		const decodedMetaMask = decodeTransactionData(1n, MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, metaMask)
 		assert.deepEqual(decodedMetaMask.status === 'decoded' ? amountTokenReferences(decodedMetaMask.call) : [], [BigInt(firstAddress)])
 
 		const kyberAddress = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'KYBER NETWORK PROXY')?.[0]
 		assert.ok(kyberAddress !== undefined)
 		const kyber = createContract(CONTRACTS[kyberAddress]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const nativeAsset = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-		const trade = decodeTransactionData(BigInt(kyberAddress), kyber.trade!.encodeInput({ src: firstAddress, srcAmount: 100n, dest: nativeAsset, destAddress: secondAddress, maxDestAmount: 90n, minConversionRate: 1n, platformWallet: secondAddress }))
+		const trade = decodeTransactionData(1n, BigInt(kyberAddress), kyber.trade!.encodeInput({ src: firstAddress, srcAmount: 100n, dest: nativeAsset, destAddress: secondAddress, maxDestAmount: 90n, minConversionRate: 1n, platformWallet: secondAddress }))
 		assert.deepEqual(trade.status === 'decoded' ? amountTokenReferences(trade.call) : [], [BigInt(firstAddress), 'native'])
 	})
 
@@ -161,6 +164,21 @@ describe('transaction calldata parsing', () => {
 		const call = { name: 'unrelated', signature: 'unrelated(uint256,uint256)', arguments: { amountETH: 1n, amountIn: 2n } }
 		assert.equal(amountTokenForArgument(call, 'amountETH', call.arguments), undefined)
 		assert.equal(amountTokenForArgument(call, 'amountIn', call.arguments), undefined)
+	})
+
+	test('keeps address-bound router ABIs and labels on their deployment chain', () => {
+		const data = createContract(METAMASK_SWAP_ROUTER_ABI).swap.encodeInput({ aggregatorId: 'test', tokenFrom: firstAddress, amount: 100n, data: new Uint8Array() })
+		assert.equal(decodeTransactionData(1n, MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, data).status, 'decoded')
+		assert.equal(decodeTransactionData(11155111n, MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, data).status, 'unknown')
+		assert.equal(getAddressLabel(MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, 1n), 'MetaMask Swap Router')
+		assert.equal(getAddressLabel(MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, 11155111n), undefined)
+	})
+
+	test('sources WETH deposit value presentation from the function registry', () => {
+		const decoded = decodeTransactionData(1n, destination, createContract(WETH).deposit.encodeInput())
+		assert.deepEqual(decoded.status === 'decoded' ? transactionValuePresentation(decoded.call) : undefined, {
+			label: 'Amount', decimals: 18, token: 'destination', fallbackSymbol: 'WETH',
+		})
 	})
 
 	test('reads a vault asset through its ABI', async () => {

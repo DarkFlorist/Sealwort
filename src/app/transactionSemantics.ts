@@ -1,24 +1,43 @@
+import { NATIVE_TOKEN_SENTINEL } from './chainConfiguration.js'
 import { bytesToHex } from './ethereum.js'
-import type { DecodedTransactionData } from './transactionDecoder.js'
+import type { DecodedTransactionData, TransactionDataDecodeResult } from './transactionDecoder.js'
 
 export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
 type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: 'first' | 'last' }
 type AmountRules = Readonly<Record<string, TokenSource>>
+type FunctionRule = {
+	readonly amounts?: AmountRules
+	readonly ambiguity?: {
+		readonly erc721Arguments: readonly string[]
+		readonly fallbackArguments: readonly string[]
+	}
+	readonly transactionValue?: { readonly label: string, readonly decimals: number, readonly token: 'destination', readonly fallbackSymbol: string }
+}
 
-const NATIVE_TOKEN_SENTINEL = 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeen
 const field = (name: string): TokenSource => ({ field: name })
 const path = (end: 'first' | 'last'): TokenSource => ({ path: end })
 
-const SIGNATURE_AMOUNT_RULES: Record<string, AmountRules> = {}
+const FUNCTION_RULES: Record<string, FunctionRule> = {}
 
 function register(signatures: readonly string[], rules: AmountRules) {
-	for (const signature of signatures) SIGNATURE_AMOUNT_RULES[signature] = rules
+	for (const signature of signatures) FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], amounts: rules }
+}
+
+function registerFunction(signature: string, rule: FunctionRule) {
+	FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], ...rule }
 }
 
 register(['transfer(address,uint256)', 'approve(address,uint256)', 'transferFrom(address,address,uint256)', 'permit(address,address,uint256,uint256,uint8,bytes32,bytes32)'], { value: 'destination' })
 register(['withdraw(uint256)'], { wad: 'destination' })
 register(['transferFromWithReferenceAndFee(address,address,uint256,bytes,uint256,address)'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') })
-register(['safeTransferFrom(address,address,uint256)'], { amount: field('tokenAddress') })
+registerFunction('safeTransferFrom(address,address,uint256)', {
+	amounts: { amount: field('tokenAddress') },
+	ambiguity: {
+		erc721Arguments: ['from', 'to', 'tokenId'],
+		fallbackArguments: ['_tokenAddress', '_to', '_amount'],
+	},
+})
+registerFunction('deposit()', { transactionValue: { label: 'Amount', decimals: 18, token: 'destination', fallbackSymbol: 'WETH' } })
 register(['deposit(uint256,address)', 'deposit(uint256,address,address)', 'withdraw(uint256,address,address)', 'requestDeposit(uint256,address,address)'], { assets: 'vaultAsset' })
 register(['mint(uint256,address)', 'mint(uint256,address,address)', 'redeem(uint256,address,address)', 'requestRedeem(uint256,address,address)'], { shares: 'destination' })
 register(['swap(string,address,uint256,bytes)'], { amount: field('tokenFrom') })
@@ -92,7 +111,7 @@ function pathToken(scope: Readonly<Record<string, unknown>>, end: 'first' | 'las
 }
 
 function rulesForScope(call: DecodedTransactionData, scope: Readonly<Record<string, unknown>>) {
-	const direct = SIGNATURE_AMOUNT_RULES[call.signature]
+	const direct = FUNCTION_RULES[call.signature]?.amounts
 	if (direct !== undefined) return direct
 	return NESTED_SCOPE_AMOUNT_RULES.find(({ fields }) => fields.every((name) => Object.hasOwn(scope, name)))?.rules
 }
@@ -127,10 +146,46 @@ export function amountTokenReferences(call: DecodedTransactionData) {
 	return references.filter((reference, index) => references.findIndex((candidate) => candidate === reference) === index)
 }
 
-export function argumentLabel(signature: string, name: string, nft: boolean) {
+export function argumentLabel(name: string, nft: boolean) {
 	if (nft && (name === 'value' || name === 'amount')) return 'Token ID'
-	if (nft && signature === 'safeTransferFrom(address,address,uint256)' && name === 'tokenAddress') return 'Sender'
 	return ARGUMENT_LABELS[name] ?? name
+}
+
+function hasArgumentNames(call: DecodedTransactionData, names: readonly string[]) {
+	const argumentsRecord = call.arguments
+	if (!isDecodedRecord(argumentsRecord)) return false
+	return names.every((name) => Object.hasOwn(argumentsRecord, name))
+}
+
+export function transactionNeedsErc721Resolution(decoded: TransactionDataDecodeResult) {
+	if (decoded.status !== 'decoded') return false
+	const ambiguity = FUNCTION_RULES[decoded.call.signature]?.ambiguity
+	return ambiguity !== undefined
+		&& decoded.candidates.some((call) => hasArgumentNames(call, ambiguity.erc721Arguments))
+		&& decoded.candidates.some((call) => hasArgumentNames(call, ambiguity.fallbackArguments))
+}
+
+export function resolveTransactionInterpretation(decoded: TransactionDataDecodeResult, erc721: boolean): TransactionDataDecodeResult {
+	if (decoded.status !== 'decoded') return decoded
+	const ambiguity = FUNCTION_RULES[decoded.call.signature]?.ambiguity
+	if (ambiguity === undefined) return decoded
+	const argumentNames = erc721 ? ambiguity.erc721Arguments : ambiguity.fallbackArguments
+	const candidate = decoded.candidates.find((call) => hasArgumentNames(call, argumentNames))
+	if (candidate !== undefined) return { ...decoded, call: candidate, candidates: [candidate] }
+	const values = Array.isArray(decoded.call.arguments) ? decoded.call.arguments : Object.values(decoded.call.arguments ?? {})
+	const call = {
+		...decoded.call,
+		arguments: Object.fromEntries(argumentNames.map((name, index) => [name, values[index]])),
+	}
+	return {
+		...decoded,
+		call,
+		candidates: [call],
+	}
+}
+
+export function transactionValuePresentation(call: DecodedTransactionData) {
+	return FUNCTION_RULES[call.signature]?.transactionValue
 }
 
 export function tokenMetadataKey(address: bigint) {
