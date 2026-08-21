@@ -1,5 +1,6 @@
 import { type Signal, useSignal } from '@preact/signals'
-import { getNativeAssetSymbol, readNativeAssetBalance } from './accountBalances.js'
+import { readNativeAssetBalance } from './accountBalances.js'
+import { getNativeAssetSymbol } from './assetFormatting.js'
 import type { SafeInformation } from './appTypes.js'
 import type { SafeStackExport } from './safeStackProtocol.js'
 import { getSafeReadProvider } from './readProvider.js'

@@ -1,7 +1,7 @@
 import type { Signal } from '@preact/signals'
 import * as funtypes from 'funtypes'
 import type { ConnectedAccountInformation } from './accountInspection.js'
-import { getNativeAssetSymbol } from './accountBalances.js'
+import { getNativeAssetSymbol } from './assetFormatting.js'
 import { CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE, type ConnectedSafeWalletSigner, type PendingAction, type SubmittedExecution, type TransactionActionError } from './appTypes.js'
 import { addressString, checksummedAddress } from './ethereum.js'
 import { type ExecutionAttemptResult, runExecutionAttempt } from './executionAttempt.js'
