@@ -6,7 +6,7 @@ import type { ConnectedSafeWalletSigner } from './appTypes.js'
 import { EthereumAddress } from './safeStackProtocol.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
-import { isWalletChainDiscoveryTimeout } from './walletProvider.js'
+import { isWalletChainDiscoveryTimeout, WalletConnectionUnavailableError } from './walletProvider.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -19,7 +19,6 @@ type ConnectedSafeBalanceState = {
 type WalletLoadResult =
 	| { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
 	| { readonly status: 'disconnected' }
-	| { readonly status: 'unavailable' }
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -143,7 +142,8 @@ export function useWalletState() {
 				chainIdResult = await provider.request({ method: 'eth_chainId' })
 			} catch (chainIdError) {
 				if (!isWalletChainDiscoveryTimeout(chainIdError)) throw chainIdError
-				return { status: 'unavailable' }
+				if (!isCurrent(operationRevision)) return undefined
+				throw new WalletConnectionUnavailableError()
 			}
 			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined

@@ -288,6 +288,25 @@ describe('Sealwort app wallet workflows', () => {
 		assert.notEqual(screen.getByRole('button', { name: 'Connect signer wallet' }), undefined)
 	})
 
+	test('ignores a chain discovery timeout from a superseded manual refresh', async () => {
+		const harness = createProviderHarness({
+			hangingMethod: 'eth_chainId',
+			hangingMethodRequestCount: 1,
+			hangingMethodStartAtRequest: 2,
+		})
+		window.ethereum = harness.provider
+		render(<App walletRequestTimeoutMs = { 20 } />)
+
+		fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
+		await waitFor(() => assert.equal(harness.requestedMethods.filter((method) => method === 'eth_chainId').length, 2))
+		harness.emitAccountsChanged()
+
+		await screen.findByRole('button', { name: 'Refresh' })
+		await Bun.sleep(30)
+		assert.equal(screen.queryByText('The wallet connection could not be completed. Try connecting again.'), null)
+		assert.notEqual(screen.getAllByText(checksummedAddress(ownerAddress)).length, 0)
+	})
+
 	test('keeps a connected wallet when stack verification chain discovery times out', async () => {
 		const harness = createProviderHarness({
 			hangingMethod: 'eth_chainId',
