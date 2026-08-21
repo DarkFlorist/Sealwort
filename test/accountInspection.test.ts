@@ -151,7 +151,7 @@ describe('connected account inspection', () => {
 		assert.equal(getPreferredNativeAssetBalance(unavailable, undefined), unavailable)
 	})
 
-	test('reads SepoliaETH and SepoliaUSDC balances using the Sepolia USDC contract', async () => {
+	test('reads SepoliaETH and USDC balances using the Sepolia USDC contract', async () => {
 		const requestedUsdcAddresses: string[] = []
 		const balances = await readConnectedSafeBalances({
 			async request(request) {
@@ -172,7 +172,7 @@ describe('connected account inspection', () => {
 				balance: { status: 'available', value: 1_000_000_000_000_000_000n },
 			},
 			usdc: {
-				symbol: 'SepoliaUSDC',
+				symbol: 'USDC',
 				balance: { status: 'available', value: 2_500_000n },
 			},
 		})

@@ -105,13 +105,13 @@ describe('Sealwort rendered UI', () => {
 	})
 
 	test('connected Safe details distinguish the vault, signer, and vault balances', () => {
-		render(<WalletSummary loading = { false } loadingLabel = 'Loading…' busy = { false } applicationLoading = { false } account = { safeAddress } chainId = { 11155111n } accountInformation = { { kind: 'safe', address: safeAddress, chainId: 11155111n, state: verifiedState } } activeSigner = { owner } activeSignerLoading = { false } balances = { { native: availableNativeAsset, usdc: { symbol: 'SepoliaUSDC', balance: { status: 'available', value: 2_000_000n } } } } balancesLoading = { false } nativeAsset = { availableNativeAsset } onConnect = { () => undefined } onRefresh = { () => undefined } />)
+		render(<WalletSummary loading = { false } loadingLabel = 'Loading…' busy = { false } applicationLoading = { false } account = { safeAddress } chainId = { 11155111n } accountInformation = { { kind: 'safe', address: safeAddress, chainId: 11155111n, state: verifiedState } } activeSigner = { owner } activeSignerLoading = { false } balances = { { native: availableNativeAsset, usdc: { symbol: 'USDC', balance: { status: 'available', value: 2_000_000n } } } } balancesLoading = { false } nativeAsset = { availableNativeAsset } onConnect = { () => undefined } onRefresh = { () => undefined } />)
 
 		const summary = screen.getByRole('region', { name: 'Connected wallet summary' })
 		assert.equal(summary.textContent?.includes('Vault'), true)
 		assert.equal(summary.textContent?.includes('Active signer'), true)
 		assert.equal(summary.textContent?.includes('SepoliaETH'), true)
-		assert.equal(summary.textContent?.includes('SepoliaUSDC'), true)
+		assert.equal(summary.textContent?.includes('USDC'), true)
 		assert.equal(screen.getByRole('button', { name: 'Refresh' }).closest('.wallet-refresh-action') !== null, true)
 	})
 

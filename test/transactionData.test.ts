@@ -14,7 +14,7 @@ import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
 import { getChainConfiguration } from '../src/app/chainConfiguration.js'
 import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
 import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
-import { MAINNET_METAMASK_SWAP_ROUTER_ADDRESS } from '../src/app/transactionDefinitions.js'
+import { MAINNET_METAMASK_SWAP_ROUTER } from '../src/app/addressRegistry.js'
 
 const destination = 0x1234n
 const firstAddress = '0x0000000000000000000000000000000000001111'
@@ -26,7 +26,7 @@ function encodedV3Path(tokens: readonly string[]) {
 }
 
 function mainnetMetaMaskSwapRouterAddress() {
-	return MAINNET_METAMASK_SWAP_ROUTER_ADDRESS
+	return MAINNET_METAMASK_SWAP_ROUTER.address
 }
 
 type AbiInput = { readonly name?: string, readonly type: string, readonly components?: readonly AbiInput[] }
@@ -229,9 +229,12 @@ describe('transaction calldata parsing', () => {
 		assert.equal(await readVaultAsset(provider, destination), BigInt(secondAddress))
 	})
 
-	test('labels every ERC-20 included in the decoder registry', () => {
+	test('uses one address registry for token labels and balance symbols', () => {
 		const expectedTokens = ['UNI', 'BAT', 'USDT', 'USDC', 'WETH', 'WBTC', 'DAI', 'COMP', 'MKR', 'AMPL']
 		assert.deepEqual(getChainConfiguration(1n).tokens.map(({ symbol }) => symbol), expectedTokens)
 		for (const { address, symbol } of getChainConfiguration(1n).tokens) assert.equal(getAddressLabel(address, 1n), symbol)
+		const sepoliaUsdc = getChainConfiguration(11155111n).balanceTokens?.usdc
+		assert.ok(sepoliaUsdc !== undefined)
+		assert.equal(getAddressLabel(sepoliaUsdc.address, 11155111n), sepoliaUsdc.symbol)
 	})
 })
