@@ -2,7 +2,9 @@ import * as assert from 'node:assert'
 import { afterEach, describe, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact'
 import { addr, signTyped } from 'micro-eth-signer'
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { App } from '../src/app/main.js'
+import { TOKEN_METADATA_ABI } from '../src/app/abis/tokenMetadata.js'
 import { bytesToHex, checksummedAddress, encodeSafeReadCall } from '../src/app/ethereum.js'
 import { createSafeTx, encodeSafeTransactionHashCall, getSafeTxHash, safeTxToTypedData } from '../src/app/safeProtocol.js'
 import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction } from '../src/app/safeStackProtocol.js'
@@ -20,6 +22,7 @@ const nonOwnerAddress = 0x9876n
 const safeAddress = 0x1234n
 const safeTx = createSafeTx(1n, safeAddress, { to: 0x5678n, value: 0n, input: new Uint8Array() }, 3n)
 const safeTxHash = BigInt(getSafeTxHash(safeTx))
+const balanceOfSelector = bytesToHex(createContract(TOKEN_METADATA_ABI).balanceOf.encodeInput(checksummedAddress(0n))).slice(0, 10)
 
 function uintWord(value: bigint) {
 	const bytes = new Uint8Array(32)
@@ -169,7 +172,7 @@ function createProviderHarness(options: {
 						case selectors.threshold: return bytesToHex(uintWord(options.threshold ?? 2n))
 						case selectors.transactionHash: return bytesToHex(uintWord(safeTxHash))
 						default:
-							if (call.data.startsWith('0x70a08231')) return bytesToHex(uintWord(0n))
+							if (call.data.startsWith(balanceOfSelector)) return bytesToHex(uintWord(0n))
 							throw new Error(`Unexpected eth_call selector ${ call.data.slice(0, 10) }`)
 					}
 				}

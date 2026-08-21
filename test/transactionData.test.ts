@@ -2,28 +2,16 @@ import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { createContract, ERC1155, ERC20, WETH } from 'micro-eth-signer/advanced/abi.js'
 import { decodeTransactionData, readIsErc721, readTokenDecimals } from '../src/app/transactionData.js'
+import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
+import { ERC721_SAFE_TRANSFER_WITH_DATA_ABI } from '../src/app/abis/erc721.js'
 
 const destination = 0x1234n
-const ERC721_SAFE_TRANSFER_WITH_DATA = [{
-	type: 'function',
-	name: 'safeTransferFrom',
-	inputs: [{ name: 'from', type: 'address' }, { name: 'to', type: 'address' }, { name: 'tokenId', type: 'uint256' }, { name: 'data', type: 'bytes' }],
-}] as const
-const CUSTOM_PAYMENT_ABI = [{
-	type: 'function',
-	name: 'transferFromWithReferenceAndFee',
-	inputs: [{ name: '_tokenAddress', type: 'address' }, { name: '_to', type: 'address' }, { name: '_amount', type: 'uint256' }, { name: '_paymentReference', type: 'bytes' }, { name: '_feeAmount', type: 'uint256' }, { name: '_feeAddress', type: 'address' }],
-}, {
-	type: 'function',
-	name: 'safeTransferFrom',
-	inputs: [{ name: '_tokenAddress', type: 'address' }, { name: '_to', type: 'address' }, { name: '_amount', type: 'uint256' }],
-}] as const
 
 describe('transaction calldata parsing', () => {
 	test('decodes ERC-20, ERC-721, ERC-1155, and WETH mint calls', () => {
 		const calls = [
 			createContract(ERC20).transfer.encodeInput({ to: '0x0000000000000000000000000000000000005678', value: 10n }),
-			createContract(ERC721_SAFE_TRANSFER_WITH_DATA).safeTransferFrom.encodeInput({ from: '0x0000000000000000000000000000000000001234', to: '0x0000000000000000000000000000000000005678', tokenId: 3n, data: new Uint8Array() }),
+			createContract(ERC721_SAFE_TRANSFER_WITH_DATA_ABI).safeTransferFrom.encodeInput({ from: '0x0000000000000000000000000000000000001234', to: '0x0000000000000000000000000000000000005678', tokenId: 3n, data: new Uint8Array() }),
 			createContract(ERC1155).safeTransferFrom.encodeInput({ from: '0x0000000000000000000000000000000000001234', to: '0x0000000000000000000000000000000000005678', id: 3n, amount: 2n, data: new Uint8Array() }),
 			createContract(WETH).deposit.encodeInput(),
 		]

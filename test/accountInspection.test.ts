@@ -1,7 +1,9 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { getStackAccountCompatibility, inspectConnectedAccount } from '../src/app/accountInspection.js'
-import { bytesToHex, encodeSafeReadCall } from '../src/app/ethereum.js'
+import { TOKEN_METADATA_ABI } from '../src/app/abis/tokenMetadata.js'
+import { addressString, bytesToHex, encodeSafeReadCall } from '../src/app/ethereum.js'
 import type { InjectedProvider, VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { formatTokenBalance, getPreferredNativeAssetBalance, readConnectedSafeBalances } from '../src/app/accountBalances.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
@@ -9,6 +11,7 @@ import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SING
 const safeAddress = 0x1234n
 const otherSafeAddress = 0x2345n
 const ownerAddress = 0x5678n
+const balanceOfSafeCall = bytesToHex(createContract(TOKEN_METADATA_ABI).balanceOf.encodeInput(addressString(safeAddress)))
 
 function uintWord(value: bigint) {
 	const bytes = new Uint8Array(32)
@@ -65,7 +68,7 @@ function createSafeProvider(): InjectedProvider {
 				throw new Error('Malformed eth_call')
 			}
 			switch (call.data) {
-				case '0x70a082310000000000000000000000000000000000000000000000000000000000001234': return bytesToHex(uintWord(12_345_678n))
+				case balanceOfSafeCall: return bytesToHex(uintWord(12_345_678n))
 				case selectors.version: return encodeStringResult(safeState.version)
 				case selectors.nonce: return bytesToHex(uintWord(safeState.nonce))
 				case selectors.owners: return bytesToHex(concat(uintWord(32n), uintWord(1n), uintWord(ownerAddress)))

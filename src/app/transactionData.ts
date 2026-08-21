@@ -1,48 +1,24 @@
-import { Decoder, ERC1155, ERC20, ERC721, WETH, type SignatureInfo } from 'micro-eth-signer/advanced/abi.js'
+import { createContract, Decoder, type ContractABI, type SignatureInfo } from 'micro-eth-signer/advanced/abi.js'
 import { formatTokenBalance } from './accountBalances.js'
-import { addressString, bytesToHex, decodeSafeUint, ensureHex, type Hex } from './ethereum.js'
+import { ERC721_INTERFACE_ID } from './abis/erc721Interface.js'
+import { TOKEN_METADATA_ABI } from './abis/tokenMetadata.js'
+import { TRANSACTION_ABIS } from './abis/transaction.js'
+import { addressString, bytesFromHex, bytesToHex, ensureHex, type Hex } from './ethereum.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 
-const CUSTOM_PAYMENT_ABI = [{
-	type: 'function',
-	name: 'transferFromWithReferenceAndFee',
-	inputs: [
-		{ name: '_tokenAddress', type: 'address' },
-		{ name: '_to', type: 'address' },
-		{ name: '_amount', type: 'uint256' },
-		{ name: '_paymentReference', type: 'bytes' },
-		{ name: '_feeAmount', type: 'uint256' },
-		{ name: '_feeAddress', type: 'address' },
-	],
-}, {
-	type: 'function',
-	name: 'safeTransferFrom',
-	inputs: [
-		{ name: '_tokenAddress', type: 'address' },
-		{ name: '_to', type: 'address' },
-		{ name: '_amount', type: 'uint256' },
-	],
-}] as const
-
-const DECODER_ADDRESSES = [
-	'0xfffffffffffffffffffffffffffffffffffffff1',
-	'0xfffffffffffffffffffffffffffffffffffffff2',
-	'0xfffffffffffffffffffffffffffffffffffffff3',
-	'0xfffffffffffffffffffffffffffffffffffffff4',
-	'0xfffffffffffffffffffffffffffffffffffffff5',
-] as const
-
-function createTransactionDecoder() {
+function decodeWithAbi(destination: string, data: Uint8Array, abi: ContractABI) {
 	const decoder = new Decoder()
-	decoder.add(DECODER_ADDRESSES[0], ERC20)
-	decoder.add(DECODER_ADDRESSES[1], ERC721)
-	decoder.add(DECODER_ADDRESSES[2], ERC1155)
-	decoder.add(DECODER_ADDRESSES[3], WETH)
-	decoder.add(DECODER_ADDRESSES[4], CUSTOM_PAYMENT_ABI)
-	return decoder
+	decoder.add(destination, abi)
+	return decoder.decode(destination, data)
 }
 
-const transactionDecoder = createTransactionDecoder()
+function decodeWithTransactionAbis(destination: bigint, data: Uint8Array) {
+	const destinationAddress = addressString(destination)
+	return TRANSACTION_ABIS.flatMap((abi) => {
+		const decoded = decodeWithAbi(destinationAddress, data, abi)
+		return decoded === undefined ? [] : Array.isArray(decoded) ? decoded : [decoded]
+	})
+}
 
 export type DecodedTransactionData = {
 	readonly name: string
@@ -64,14 +40,14 @@ function uniqueCandidates(decoded: SignatureInfo | readonly SignatureInfo[]) {
 export function decodeTransactionData(destination: bigint, data: Uint8Array): TransactionDataDecodeResult {
 	if (data.length === 0) return { status: 'empty' }
 	try {
-		const decoded = transactionDecoder.decode(addressString(destination), data)
-		if (decoded === undefined) return { status: 'unknown' }
+		const decoded = decodeWithTransactionAbis(destination, data)
+		if (decoded.length === 0) return { status: 'unknown' }
 		const candidates = uniqueCandidates(decoded)
 		// The requested payment helper shares its selector with ERC-721's three-argument
 		// safeTransferFrom. Prefer the helper's descriptive argument names; the four-
 		// argument ERC-721 overload remains unambiguous.
 		const call = candidates[0]?.signature === 'safeTransferFrom(address,address,uint256)'
-			? (Array.isArray(decoded) ? [...decoded].reverse().find(({ signature }) => signature === 'safeTransferFrom(address,address,uint256)') : decoded)
+			? [...decoded].reverse().find(({ signature }) => signature === 'safeTransferFrom(address,address,uint256)')
 			: candidates[0]
 		if (call === undefined) return { status: 'unknown' }
 		return {
@@ -125,25 +101,25 @@ export function formatTokenAmount(value: bigint, decimals: number, symbol = 'tok
 	return `${ formatTokenBalance(value, decimals, Math.min(decimals, 12)) } ${ symbol }`
 }
 
-const DECIMALS_CALL = '0x313ce567'
-const ERC721_INTERFACE_CALL = `0x01ffc9a7${ '80ac58cd'.padEnd(64, '0') }`
+const TokenMetadataContract = createContract(TOKEN_METADATA_ABI)
+
+async function readContract(provider: InjectedProvider, contractAddress: bigint, data: Uint8Array, label: string) {
+	return bytesFromHex(ensureHex(String(await provider.request({
+		method: 'eth_call',
+		params: [{ to: addressString(contractAddress), data: bytesToHex(data) }, 'latest'],
+	})), label))
+}
 
 export async function readTokenDecimals(provider: InjectedProvider, tokenAddress: bigint) {
-	const response = ensureHex(String(await provider.request({
-		method: 'eth_call',
-		params: [{ to: addressString(tokenAddress), data: DECIMALS_CALL }, 'latest'],
-	})), 'Token decimals result')
-	const decimals = decodeSafeUint(response, 'Token decimals')
-	if (decimals > 255n) throw new Error('Token returned an invalid decimals value.')
+	const response = await readContract(provider, tokenAddress, TokenMetadataContract.decimals.encodeInput(), 'Token decimals result')
+	const decimals = TokenMetadataContract.decimals.decodeOutput(response)
 	return Number(decimals)
 }
 
 export async function readIsErc721(provider: InjectedProvider, tokenAddress: bigint) {
-	const response = ensureHex(String(await provider.request({
-		method: 'eth_call',
-		params: [{ to: addressString(tokenAddress), data: ERC721_INTERFACE_CALL }, 'latest'],
-	})), 'ERC-721 interface result')
-	return decodeSafeUint(response, 'ERC-721 interface') !== 0n
+	const call = TokenMetadataContract.supportsInterface.encodeInput(ERC721_INTERFACE_ID)
+	const response = await readContract(provider, tokenAddress, call, 'ERC-721 interface result')
+	return TokenMetadataContract.supportsInterface.decodeOutput(response)
 }
 
 export function hasErc721AmountAmbiguity(call: DecodedTransactionData) {

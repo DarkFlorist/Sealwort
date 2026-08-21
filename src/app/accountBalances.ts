@@ -1,5 +1,7 @@
 import * as funtypes from 'funtypes'
-import { addressString, decodeSafeUint, ensureHex, type Hex } from './ethereum.js'
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
+import { TOKEN_METADATA_ABI } from './abis/tokenMetadata.js'
+import { addressString, bytesFromHex, bytesToHex, ensureHex } from './ethereum.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 
@@ -7,7 +9,7 @@ const ETHEREUM_MAINNET_CHAIN_ID = 1n
 const ETHEREUM_SEPOLIA_CHAIN_ID = 11155111n
 const MAINNET_USDC_ADDRESS = 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n
 const SEPOLIA_USDC_ADDRESS = 0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n
-const ERC20_BALANCE_OF_SELECTOR = '0x70a08231'
+const TokenMetadataContract = createContract(TOKEN_METADATA_ABI)
 
 export type AssetBalance =
 	| { readonly status: 'available', readonly value: bigint }
@@ -70,16 +72,23 @@ function parseEthereumQuantity(value: unknown, label: string) {
 	return BigInt(quantity)
 }
 
-function encodeBalanceOfCall(address: bigint): Hex {
-	return ensureHex(`${ ERC20_BALANCE_OF_SELECTOR }${ addressString(address).slice(2).padStart(64, '0') }`, 'USDC balanceOf call')
-}
-
 async function readAssetBalance(read: () => Promise<bigint>): Promise<AssetBalance> {
 	try {
 		return { status: 'available', value: await read() }
 	} catch (balanceError) {
 		return { status: 'unavailable', error: getUserFacingErrorMessage(balanceError) }
 	}
+}
+
+async function readTokenBalance(provider: InjectedProvider, tokenAddress: bigint, owner: bigint, symbol: string) {
+	const result = funtypes.String.parse(await provider.request({
+		method: 'eth_call',
+		params: [{
+			to: addressString(tokenAddress),
+			data: bytesToHex(TokenMetadataContract.balanceOf.encodeInput(addressString(owner))),
+		}, 'latest'],
+	}))
+	return TokenMetadataContract.balanceOf.decodeOutput(bytesFromHex(ensureHex(result, `${ symbol } balanceOf result`)))
 }
 
 export async function readNativeAssetBalance(provider: InjectedProvider, address: bigint, chainId: bigint): Promise<NativeAssetBalance> {
@@ -107,13 +116,7 @@ export async function readConnectedSafeBalances(provider: InjectedProvider, safe
 	const usdcConfiguration = configuration.usdc
 	const [native, usdcBalance] = await Promise.all([
 		nativeBalancePromise,
-		readAssetBalance(async () => decodeSafeUint(ensureHex(funtypes.String.parse(await provider.request({
-			method: 'eth_call',
-			params: [{
-				to: addressString(usdcConfiguration.address),
-				data: encodeBalanceOfCall(safeAddress),
-			}, 'latest'],
-		})), `${ usdcConfiguration.symbol } balanceOf result`), `${ usdcConfiguration.symbol } balance`)),
+		readAssetBalance(async () => await readTokenBalance(provider, usdcConfiguration.address, safeAddress, usdcConfiguration.symbol)),
 	])
 	return {
 		native,
