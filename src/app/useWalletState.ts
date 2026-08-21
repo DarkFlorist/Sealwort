@@ -31,9 +31,7 @@ export function useWalletState() {
 
 	const isCurrent = (operationRevision: number) => revision.peek() === operationRevision
 
-	const beginLoad = () => {
-		const operationRevision = revision.peek() + 1
-		revision.value = operationRevision
+	const resetWalletState = () => {
 		account.value = undefined
 		chainId.value = undefined
 		information.value = undefined
@@ -42,6 +40,12 @@ export function useWalletState() {
 		balancesLoading.value = false
 		safeWalletSigners.value = []
 		safeWalletSignerLoading.value = false
+	}
+
+	const beginLoad = () => {
+		const operationRevision = revision.peek() + 1
+		revision.value = operationRevision
+		resetWalletState()
 		loading.value = true
 		return operationRevision
 	}
@@ -56,12 +60,8 @@ export function useWalletState() {
 
 	const disconnect = (operationRevision: number) => {
 		if (!isCurrent(operationRevision)) return
-		account.value = undefined
-		chainId.value = undefined
-		information.value = undefined
-		balances.value = undefined
-		safeWalletSigners.value = []
-		stopLoading(operationRevision)
+		resetWalletState()
+		loading.value = false
 	}
 
 	const refreshAccountInformation = async (

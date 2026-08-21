@@ -98,6 +98,15 @@ export function App({
 		if (pendingAction.peek() === action) pendingAction.value = undefined
 	}
 
+	const resolveWalletLoadError = (operationRevision: number, walletError: unknown) => {
+		if (isWalletRequestTimeoutError(walletError, 'eth_chainId')) {
+			disconnectWallet(operationRevision)
+			return undefined
+		}
+		stopWalletLoading(operationRevision)
+		return getUserFacingErrorMessage(walletError)
+	}
+
 	const verifyLoadedStack = async (provider: InjectedProvider, loadedStack: SafeStackExport) => {
 		return await validateSafeStackAtCurrentNonce(provider, loadedStack)
 	}
@@ -159,13 +168,7 @@ export function App({
 				verifiedSafeStates.value = []
 				status.value = undefined
 			}
-			if (isWalletRequestTimeoutError(providerError, 'eth_chainId')) {
-				disconnectWallet(walletRefreshRevision)
-				error.value = undefined
-			} else {
-				stopWalletLoading(walletRefreshRevision)
-				error.value = getUserFacingErrorMessage(providerError)
-			}
+			error.value = resolveWalletLoadError(walletRefreshRevision, providerError)
 		} finally {
 			if (provider === window.ethereum && isCurrentWalletOperation(walletRefreshRevision)) {
 				applicationLoading.value = false
@@ -241,10 +244,8 @@ export function App({
 				stackVerified.value = false
 				verifiedSafeStates.value = []
 			}
-			if (isWalletRequestTimeoutError(connectError, 'eth_chainId')) disconnectWallet(connectWalletRevision)
-			else stopWalletLoading(connectWalletRevision)
 			status.value = undefined
-			error.value = isWalletRequestTimeoutError(connectError, 'eth_chainId') ? undefined : getUserFacingErrorMessage(connectError)
+			error.value = resolveWalletLoadError(connectWalletRevision, connectError)
 		} finally {
 			if (isCurrentStackOperation(stackRevision.peek(), verificationRevision, stackExport.peek(), loadedStackAtVerification)) stackVerificationLoading.value = false
 			if (isCurrentWalletOperation(connectWalletRevision)) finishPendingAction(action)
