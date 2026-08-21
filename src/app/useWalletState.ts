@@ -15,9 +15,10 @@ type ConnectedSafeBalanceState = {
 	readonly balances: ConnectedSafeBalances
 }
 
-type WalletLoadResult =
-	| { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
-	| { readonly status: 'disconnected' }
+type ConnectedWalletLoadResult = { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
+type WalletLoadResult<RequestAccess extends boolean> =
+	| ConnectedWalletLoadResult
+	| (RequestAccess extends true ? never : { readonly status: 'disconnected' })
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -128,14 +129,18 @@ export function useWalletState() {
 		}
 	}
 
-	const load = async (provider: InjectedProvider, operationRevision: number, requestAccess: boolean): Promise<WalletLoadResult | undefined> => {
+	const load = async <RequestAccess extends boolean>(
+		provider: InjectedProvider,
+		operationRevision: number,
+		requestAccess: RequestAccess,
+	): Promise<WalletLoadResult<RequestAccess> | undefined> => {
 		try {
 			const accountsResult = await provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' })
 			const accounts = EthereumAccounts.parse(accountsResult)
 			if (!isCurrent(operationRevision)) return undefined
 			const selectedAccount = accounts[0]
 			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
-			if (selectedAccount === undefined) return { status: 'disconnected' }
+			if (selectedAccount === undefined) return { status: 'disconnected' } as WalletLoadResult<RequestAccess>
 			const chainIdResult = await provider.request({ method: 'eth_chainId' })
 			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined

@@ -101,10 +101,10 @@ export function App({
 		return await validateSafeStackAtCurrentNonce(provider, loadedStack)
 	}
 
-	const loadWalletIdentity = async (
+	const loadWalletIdentity = async <RequestAccess extends boolean>(
 		provider: InjectedProvider,
 		operationRevision: number,
-		requestAccess: boolean,
+		requestAccess: RequestAccess,
 		reportUnavailable: boolean,
 	) => {
 		try {
@@ -230,7 +230,7 @@ export function App({
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
 			const walletIdentity = await loadWalletIdentity(provider, connectWalletRevision, true, true)
-			if (walletIdentity === undefined || walletIdentity.status === 'disconnected') return
+			if (walletIdentity === undefined) return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()

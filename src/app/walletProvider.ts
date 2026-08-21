@@ -18,13 +18,13 @@ export function isWalletRequestTimeoutError(error: unknown, method?: string): er
 }
 
 export type WalletRequestFailurePolicy = {
+	readonly kind: 'chain-discovery-timeout'
 	readonly suppressDuringPassiveConnection: boolean
-	readonly userMessage: string
 }
 
 const CHAIN_DISCOVERY_TIMEOUT_POLICY: WalletRequestFailurePolicy = {
+	kind: 'chain-discovery-timeout',
 	suppressDuringPassiveConnection: true,
-	userMessage: 'The wallet connection could not be completed. Try connecting again.',
 }
 
 export function getWalletRequestFailurePolicy(error: unknown): WalletRequestFailurePolicy | undefined {

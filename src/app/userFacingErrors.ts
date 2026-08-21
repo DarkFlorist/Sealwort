@@ -1,5 +1,7 @@
 import { getWalletRequestFailurePolicy } from './walletProvider.js'
 
+const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
+
 type ErrorRecord = {
 	readonly code?: unknown
 	readonly message?: unknown
@@ -47,7 +49,7 @@ export function isUserRejectedError(error: unknown): boolean {
 export function getUserFacingErrorMessage(error: unknown) {
 	if (isUserRejectedError(error)) return 'The wallet request was rejected.'
 	const walletRequestFailurePolicy = getWalletRequestFailurePolicy(error)
-	if (walletRequestFailurePolicy !== undefined) return walletRequestFailurePolicy.userMessage
+	if (walletRequestFailurePolicy?.kind === 'chain-discovery-timeout') return WALLET_CONNECTION_UNAVAILABLE_MESSAGE
 	if (error instanceof Error && error.message.trim().length !== 0) {
 		const nestedMessage = nestedProviderMessage(error, new Set<object>())
 		return nestedMessage ?? error.message

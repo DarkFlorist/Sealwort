@@ -28,8 +28,8 @@ describe('wallet provider request timeout', () => {
 
 	test('owns the presentation policy for wallet chain discovery timeouts', () => {
 		assert.deepEqual(getWalletRequestFailurePolicy(new WalletRequestTimeoutError('eth_chainId')), {
+			kind: 'chain-discovery-timeout',
 			suppressDuringPassiveConnection: true,
-			userMessage: 'The wallet connection could not be completed. Try connecting again.',
 		})
 		assert.equal(getWalletRequestFailurePolicy(new WalletRequestTimeoutError('eth_getCode')), undefined)
 	})
