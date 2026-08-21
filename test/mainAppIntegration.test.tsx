@@ -199,8 +199,9 @@ describe('Sealwort app wallet workflows', () => {
 		render(<App />)
 
 		fireEvent.click(screen.getByText('RPC settings'))
-		const rpcUrlInput = screen.getByLabelText('Ethereum RPC URL') as HTMLInputElement
+		const rpcUrlInput = screen.getByLabelText('Ethereum Mainnet RPC URL') as HTMLInputElement
 		assert.equal(rpcUrlInput.value, DEFAULT_ETHEREUM_RPC_URL)
+		assert.notEqual(screen.getByText('Used only when wallet is not connected'), undefined)
 		fireEvent.input(rpcUrlInput, { target: { value: 'https://rpc.example.test/v1/key' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -212,7 +213,7 @@ describe('Sealwort app wallet workflows', () => {
 		render(<App />)
 
 		fireEvent.click(screen.getByText('RPC settings'))
-		const rpcUrlInput = screen.getByLabelText('Ethereum RPC URL')
+		const rpcUrlInput = screen.getByLabelText('Ethereum Mainnet RPC URL')
 		fireEvent.input(rpcUrlInput, { target: { value: 'http://rpc.example.test' } })
 		fireEvent.submit(screen.getByRole('button', { name: 'Save' }).closest('form') as HTMLFormElement)
 

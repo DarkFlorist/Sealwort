@@ -30,7 +30,7 @@ export function RpcSettings({ rpcUrl, disabled, onSave }: {
 			event.preventDefault()
 			save(draftUrl.value)
 		} }>
-			<label for = 'ethereum-rpc-url'>Ethereum RPC URL</label>
+			<label for = 'ethereum-rpc-url'>Ethereum Mainnet RPC URL</label>
 			<input
 				id = 'ethereum-rpc-url'
 				type = 'url'
@@ -45,7 +45,7 @@ export function RpcSettings({ rpcUrl, disabled, onSave }: {
 					validationError.value = undefined
 				} }
 			/>
-			<p class = 'rpc-settings-note'>Used for Ethereum mainnet reads when the wallet is not on mainnet. The selected RPC receives queried Safe addresses and must allow browser requests from this site.</p>
+			<p class = 'rpc-settings-note'>Used only when wallet is not connected</p>
 			<div class = 'rpc-settings-actions'>
 				<button type = 'submit' disabled = { disabled }>Save</button>
 				<button type = 'button' class = 'secondary' disabled = { disabled || draftUrl.value === DEFAULT_ETHEREUM_RPC_URL } onClick = { () => { save(DEFAULT_ETHEREUM_RPC_URL) } }>Use default</button>
