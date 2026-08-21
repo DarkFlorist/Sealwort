@@ -2,10 +2,12 @@ import * as assert from 'assert'
 import { describe, test } from 'bun:test'
 import { addr, signTyped } from 'micro-eth-signer'
 import { createContract } from 'micro-eth-signer/advanced/abi.js'
+import { ChainDiscoveryUnavailableError } from '../src/app/chainDiscoveryError.js'
 import { bytesToHex, decodeSafeVersion, encodeSafeReadCall } from '../src/app/ethereum.js'
 import { createSafeTx, encodeSafeTransactionHashCall, getSafeTxHash, safeTxToTypedData } from '../src/app/safeProtocol.js'
 import { SAFE_STACK_FORMAT_VERSION, SafeStackExport } from '../src/app/safeStackProtocol.js'
 import { type InjectedProvider, assertReturnedSafeOwner, getFreshSigningAccount, getSafeSigningAccountMode, hasSafeSignatureFromCurrentRoute, parseSafeStackText, validateSafeStackAgainstProvider, validateSafeStackAtCurrentNonce } from '../src/app/safeStackValidation.js'
+import { WalletRequestTimeoutError } from '../src/app/walletProvider.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
 const ownerPrivateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -227,6 +229,17 @@ describe('Safe co-signer app provider validation', () => {
 		assert.equal(states.length, 1)
 		assert.equal(states[0]?.nonce, 3n)
 		assert.equal(states[0]?.threshold, 2n)
+	})
+
+	test('translates chain discovery timeouts at the validation boundary', async () => {
+		const stackExport = await createStackExport(false)
+
+		await assert.rejects(
+			validateSafeStackAtCurrentNonce({
+				async request() { throw new WalletRequestTimeoutError('eth_chainId') },
+			}, stackExport),
+			(error) => error instanceof ChainDiscoveryUnavailableError && error.context === 'stack-verification',
+		)
 	})
 
 	test('rejects contracts that mimic the Safe interface without an official proxy runtime', async () => {

@@ -6,7 +6,7 @@ import type { ConnectedSafeWalletSigner } from './appTypes.js'
 import { EthereumAddress } from './safeStackProtocol.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
-import { readWalletChainId } from './walletConnection.js'
+import { readChainId } from './chainDiscovery.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -142,7 +142,7 @@ export function useWalletState() {
 			const selectedAccount = accounts[0]
 			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
 			if (selectedAccount === undefined) return { status: 'disconnected' }
-			const selectedChainId = await readWalletChainId(provider)
+			const selectedChainId = await readChainId(provider, 'wallet-connection')
 			if (!isCurrent(operationRevision)) return undefined
 			account.value = selectedAccount
 			chainId.value = selectedChainId
