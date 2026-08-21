@@ -17,7 +17,7 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { isWalletChainDiscoveryTimeout, withWalletRequestTimeout } from './walletProvider.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -98,19 +98,13 @@ export function App({
 		if (pendingAction.peek() === action) pendingAction.value = undefined
 	}
 
-	const loadWalletIdentity = async (
-		provider: InjectedProvider,
-		operationRevision: number,
-		requestAccess: boolean,
+	const handleWalletLoadResult = (
+		walletIdentity: Awaited<ReturnType<typeof loadWallet>>,
 		reportUnavailable: boolean,
 	) => {
-		try {
-			return await loadWallet(provider, operationRevision, requestAccess)
-		} catch (walletLoadError) {
-			if (!isWalletChainDiscoveryTimeout(walletLoadError)) throw walletLoadError
-			if (reportUnavailable) error.value = WALLET_CONNECTION_UNAVAILABLE_MESSAGE
-			return { status: 'unavailable' } as const
-		}
+		if (walletIdentity?.status !== 'unavailable') return walletIdentity
+		if (reportUnavailable) error.value = WALLET_CONNECTION_UNAVAILABLE_MESSAGE
+		return undefined
 	}
 
 	const verifyLoadedStack = async (provider: InjectedProvider, loadedStack: SafeStackExport) => {
@@ -123,7 +117,7 @@ export function App({
 		reportUnavailable: boolean,
 	) => {
 		error.value = undefined
-		const walletIdentity = await loadWalletIdentity(provider, operationRevision, false, reportUnavailable)
+		const walletIdentity = handleWalletLoadResult(await loadWallet(provider, operationRevision, false), reportUnavailable)
 		if (walletIdentity === undefined) return
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
@@ -228,9 +222,8 @@ export function App({
 		try {
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
-			const walletIdentity = await loadWalletIdentity(provider, connectWalletRevision, true, true)
+			const walletIdentity = handleWalletLoadResult(await loadWallet(provider, connectWalletRevision, true), true)
 			if (walletIdentity === undefined || walletIdentity.status === 'disconnected') return
-			if (walletIdentity.status === 'unavailable') return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()
