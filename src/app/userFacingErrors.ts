@@ -1,6 +1,8 @@
 import { WalletConnectionUnavailableError } from './walletConnectionError.js'
+import { ChainDiscoveryUnavailableError } from './chainDiscoveryError.js'
 
 const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
+const CHAIN_DISCOVERY_UNAVAILABLE_MESSAGE = 'The wallet network could not be confirmed. Try again.'
 
 type ErrorRecord = {
 	readonly code?: unknown
@@ -49,6 +51,7 @@ export function isUserRejectedError(error: unknown): boolean {
 export function getUserFacingErrorMessage(error: unknown) {
 	if (isUserRejectedError(error)) return 'The wallet request was rejected.'
 	if (error instanceof WalletConnectionUnavailableError) return WALLET_CONNECTION_UNAVAILABLE_MESSAGE
+	if (error instanceof ChainDiscoveryUnavailableError) return CHAIN_DISCOVERY_UNAVAILABLE_MESSAGE
 	if (error instanceof Error && error.message.trim().length !== 0) {
 		const nestedMessage = nestedProviderMessage(error, new Set<object>())
 		return nestedMessage ?? error.message

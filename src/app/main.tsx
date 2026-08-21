@@ -19,7 +19,7 @@ import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
-import { withWalletConnectionError } from './walletConnection.js'
+import { withChainDiscoveryError } from './chainDiscovery.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -99,7 +99,7 @@ export function App({
 	}
 
 	const verifyLoadedStack = async (provider: InjectedProvider, loadedStack: SafeStackExport) => {
-		return await withWalletConnectionError(async () => await validateSafeStackAtCurrentNonce(provider, loadedStack))
+		return await withChainDiscoveryError(async () => await validateSafeStackAtCurrentNonce(provider, loadedStack))
 	}
 
 	const refreshWalletAndStack = async (

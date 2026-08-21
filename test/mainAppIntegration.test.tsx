@@ -77,6 +77,7 @@ type ProviderHarness = {
 	readonly requestedMethods: readonly string[]
 	setAccounts(accounts: readonly string[]): void
 	failNextWalletIdentityRequest(): void
+	hangNextChainIdRequest(): void
 	emitAccountsChanged(): void
 }
 
@@ -97,6 +98,7 @@ function createProviderHarness(options: {
 	let signatureRequests = 0
 	let executionRequests = 0
 	let failNextWalletIdentityRequest = false
+	let hangNextChainIdRequest = false
 	let hangingMethodRequestsRemaining = options.hangingMethodRequestCount ?? Number.POSITIVE_INFINITY
 	let matchingHangingMethodRequests = 0
 	const requestedMethods: string[] = []
@@ -117,6 +119,10 @@ function createProviderHarness(options: {
 		},
 		async request(request) {
 			requestedMethods.push(request.method)
+			if (request.method === 'eth_chainId' && hangNextChainIdRequest) {
+				hangNextChainIdRequest = false
+				return await new Promise<never>(() => undefined)
+			}
 			if (request.method === options.hangingMethod) {
 				matchingHangingMethodRequests += 1
 				if (matchingHangingMethodRequests >= (options.hangingMethodStartAtRequest ?? 1) && hangingMethodRequestsRemaining > 0) {
@@ -191,6 +197,7 @@ function createProviderHarness(options: {
 		requestedMethods,
 		setAccounts(nextAccounts) { accounts = [...nextAccounts] },
 		failNextWalletIdentityRequest() { failNextWalletIdentityRequest = true },
+		hangNextChainIdRequest() { hangNextChainIdRequest = true },
 		emitAccountsChanged() {
 			for (const listener of accountListeners) listener(accounts)
 		},
@@ -318,6 +325,29 @@ describe('Sealwort app wallet workflows', () => {
 		assert.notEqual(screen.getAllByText(checksummedAddress(ownerAddress)).length, 0)
 	})
 
+	test('ignores a passive chain discovery timeout after a newer load verifies the stack', async () => {
+		const harness = createProviderHarness()
+		window.ethereum = harness.provider
+		window.localStorage.setItem(
+			PERSISTED_SAFE_STACK_STORAGE_KEY,
+			JSON.stringify(SafeStackExport.serialize(createStack())),
+		)
+		render(<App walletRequestTimeoutMs = { 20 } />)
+
+		const signButton = await screen.findByRole('button', { name: 'Add my signature' }, { timeout: 3000 }) as HTMLButtonElement
+		await waitFor(() => assert.equal(signButton.disabled, false))
+		const chainRequestCount = harness.requestedMethods.filter((method) => method === 'eth_chainId').length
+		harness.hangNextChainIdRequest()
+		harness.emitAccountsChanged()
+		await waitFor(() => assert.equal(harness.requestedMethods.filter((method) => method === 'eth_chainId').length, chainRequestCount + 1))
+		harness.emitAccountsChanged()
+
+		await waitFor(() => assert.equal((screen.getByRole('button', { name: 'Add my signature' }) as HTMLButtonElement).disabled, false))
+		await Bun.sleep(30)
+		assert.equal((screen.getByRole('button', { name: 'Add my signature' }) as HTMLButtonElement).disabled, false)
+		assert.equal(screen.queryByText('Select a signer wallet account to verify the imported Gnosis Safe stack.'), null)
+	})
+
 	test('keeps a connected wallet and hides RPC details when stack verification chain discovery times out', async () => {
 		const harness = createProviderHarness({
 			hangingMethod: 'eth_chainId',
@@ -331,7 +361,7 @@ describe('Sealwort app wallet workflows', () => {
 		)
 		render(<App walletRequestTimeoutMs = { 5 } />)
 
-		await screen.findByText('The wallet connection could not be completed. Try connecting again.')
+		await screen.findByText('The wallet network could not be confirmed. Try again.')
 		assert.equal(screen.queryByText(getWalletRequestTimeoutMessage('eth_chainId')), null)
 		assert.notEqual(screen.getAllByText(checksummedAddress(ownerAddress)).length, 0)
 		assert.equal(screen.queryByRole('button', { name: 'Connect signer wallet' }), null)

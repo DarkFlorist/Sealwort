@@ -150,7 +150,9 @@ export function useWalletState() {
 			try {
 				selectedChainId = await readWalletChainId(provider)
 			} catch (chainDiscoveryError) {
-				if (intent === 'discover' && chainDiscoveryError instanceof WalletConnectionUnavailableError) return { status: 'disconnected' }
+				if (intent === 'discover' && chainDiscoveryError instanceof WalletConnectionUnavailableError) {
+					return isCurrent(operationRevision) ? { status: 'disconnected' } : undefined
+				}
 				throw chainDiscoveryError
 			}
 			if (!isCurrent(operationRevision)) return undefined
