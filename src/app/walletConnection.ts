@@ -7,8 +7,12 @@ type WalletChainProvider = {
 }
 
 export async function readWalletChainId(provider: WalletChainProvider) {
+	return await withWalletConnectionError(async () => BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' }))))
+}
+
+export async function withWalletConnectionError<Result>(operation: () => Promise<Result>) {
 	try {
-		return BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' })))
+		return await operation()
 	} catch (chainDiscoveryError) {
 		if (isWalletChainDiscoveryTimeoutError(chainDiscoveryError)) {
 			throw new WalletConnectionUnavailableError({ cause: chainDiscoveryError })
