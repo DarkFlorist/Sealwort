@@ -19,7 +19,7 @@ type ConnectedSafeBalanceState = {
 type WalletLoadResult =
 	| { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
 	| { readonly status: 'disconnected' }
-	| { readonly status: 'unavailable', readonly reason: 'chain-discovery-timeout' }
+	| { readonly status: 'unavailable' }
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -62,12 +62,6 @@ export function useWalletState() {
 		balancesLoading.value = false
 		loading.value = false
 		safeWalletSignerLoading.value = false
-	}
-
-	const disconnect = (operationRevision: number) => {
-		if (!isCurrent(operationRevision)) return
-		resetWalletState()
-		loading.value = false
 	}
 
 	const refreshAccountInformation = async (
@@ -149,8 +143,7 @@ export function useWalletState() {
 				chainIdResult = await provider.request({ method: 'eth_chainId' })
 			} catch (chainIdError) {
 				if (!isWalletRequestTimeoutError(chainIdError, 'eth_chainId')) throw chainIdError
-				disconnect(operationRevision)
-				return { status: 'unavailable', reason: 'chain-discovery-timeout' }
+				return { status: 'unavailable' }
 			}
 			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined
