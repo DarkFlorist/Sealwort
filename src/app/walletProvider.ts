@@ -2,7 +2,6 @@ import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js
 
 export const DEFAULT_WALLET_REQUEST_TIMEOUT_MS = 15_000
 export const INTERACTIVE_WALLET_REQUEST_TIMEOUT_MS = 120_000
-const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
 
 export class WalletRequestTimeoutError extends Error {
 	readonly method: string
@@ -20,17 +19,6 @@ export function isWalletRequestTimeoutError(error: unknown, method?: string): er
 
 export function isWalletChainDiscoveryTimeout(error: unknown) {
 	return isWalletRequestTimeoutError(error, 'eth_chainId')
-}
-
-export class WalletConnectionUnavailableError extends Error {
-	constructor() {
-		super(WALLET_CONNECTION_UNAVAILABLE_MESSAGE)
-		this.name = 'WalletConnectionUnavailableError'
-	}
-}
-
-export function isWalletConnectionUnavailableError(error: unknown): error is WalletConnectionUnavailableError {
-	return error instanceof WalletConnectionUnavailableError
 }
 
 function requiresUnlimitedReviewTime(method: string) {
