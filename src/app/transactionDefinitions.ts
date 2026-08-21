@@ -3,8 +3,10 @@ import { CUSTOM_PAYMENT_ABI } from './abis/customPayment.js'
 import { ERC2612_ABI } from './abis/erc2612.js'
 import { ERC4626_ABI } from './abis/erc4626.js'
 import { ERC7540_ABI } from './abis/erc7540.js'
+import { KYBER_NETWORK_PROXY_ABI } from './abis/kyberNetworkProxy.js'
 import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
-import { microDecoderContractAbi } from './abis/microDecoder.js'
+import { UNISWAP_V2_ROUTER_ABI } from './abis/uniswapV2Router.js'
+import { UNISWAP_V3_ROUTER_ABI } from './abis/uniswapV3Router.js'
 import { MAINNET_TRANSACTION_CONTRACTS, type RegisteredTransactionContract } from './addressRegistry.js'
 
 export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
@@ -31,8 +33,8 @@ const functionRule = (names: readonly string[], amounts: AmountRules): FunctionR
 // Uniswap V3 exact-output paths are encoded backwards: output token first, input token last.
 const exactOutputPathAmounts = { amountOut: path('first'), amountInMaximum: path('last') } as const
 
-function deployedDefinition(deployment: RegisteredTransactionContract, abi: ContractABI | undefined, functions: readonly FunctionRuleDefinition[]): readonly TransactionDefinition[] {
-	return abi === undefined ? [] : [{ abi, functions, deployment }]
+function deployedDefinition(deployment: RegisteredTransactionContract, abi: ContractABI, functions: readonly FunctionRuleDefinition[]): TransactionDefinition {
+	return { abi, functions, deployment }
 }
 
 const uniswapV2Rules = [
@@ -58,23 +60,14 @@ const uniswapV3Rules = [
 	functionRule(['exactOutputSingle'], { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') }),
 ] as const
 
-type AddressBoundInterpretation = {
-	readonly abi: ContractABI | undefined
-	readonly functions: readonly FunctionRuleDefinition[]
-}
-
-const MAINNET_TRANSACTION_INTERPRETATIONS = {
-	uniswapV2Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address), functions: uniswapV2Rules },
-	uniswapV3Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address), functions: uniswapV3Rules },
-	kyberNetworkProxy: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.kyberNetworkProxy.address), functions: [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })] },
-	metaMaskSwapRouter: { abi: METAMASK_SWAP_ROUTER_ABI, functions: [functionRule(['swap'], { amount: field('tokenFrom') })] },
-} as const satisfies Readonly<Record<keyof typeof MAINNET_TRANSACTION_CONTRACTS, AddressBoundInterpretation>>
-
-const MAINNET_TRANSACTION_DEFINITIONS = (Object.keys(MAINNET_TRANSACTION_CONTRACTS) as (keyof typeof MAINNET_TRANSACTION_CONTRACTS)[]).flatMap((name) => {
-	const deployment = MAINNET_TRANSACTION_CONTRACTS[name]
-	const interpretation: AddressBoundInterpretation = MAINNET_TRANSACTION_INTERPRETATIONS[name]
-	return deployedDefinition(deployment, interpretation.abi, interpretation.functions)
-})
+// Each deployed decoder directly binds the lightweight label/address object to its
+// app-owned ABI and semantics. The registry synchronization test enforces coverage.
+const MAINNET_TRANSACTION_DEFINITIONS = [
+	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router, UNISWAP_V2_ROUTER_ABI, uniswapV2Rules),
+	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router, UNISWAP_V3_ROUTER_ABI, uniswapV3Rules),
+	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.kyberNetworkProxy, KYBER_NETWORK_PROXY_ABI, [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })]),
+	deployedDefinition(MAINNET_TRANSACTION_CONTRACTS.metaMaskSwapRouter, METAMASK_SWAP_ROUTER_ABI, [functionRule(['swap'], { amount: field('tokenFrom') })]),
+] as const
 
 export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 	{ abi: ERC20, functions: [functionRule(['transfer', 'approve', 'transferFrom'], { value: 'destination' })] },

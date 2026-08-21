@@ -8,9 +8,12 @@ import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
-import { CONTRACTS, createContract, ERC20, ERC721, UNISWAP_V2_ROUTER_CONTRACT, UNISWAP_V3_ROUTER_CONTRACT, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { createContract, ERC20, ERC721 } from 'micro-eth-signer/advanced/abi.js'
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
+import { UNISWAP_V2_ROUTER_ABI } from '../src/app/abis/uniswapV2Router.js'
+import { UNISWAP_V3_ROUTER_ABI } from '../src/app/abis/uniswapV3Router.js'
+import { MAINNET_TRANSACTION_CONTRACTS } from '../src/app/addressRegistry.js'
 import { dataStringWith0xStart } from '../src/app/ethereum.js'
 import { useTransactionDataMetadata } from '../src/app/useTransactionDataMetadata.js'
 
@@ -341,7 +344,7 @@ describe('Sealwort rendered UI', () => {
 	test('formats both sides of a Uniswap V2 swap with known token metadata', async () => {
 		const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 		const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
-		const router = createContract(CONTRACTS[UNISWAP_V2_ROUTER_CONTRACT]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const router = createContract(UNISWAP_V2_ROUTER_ABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const data = router.swapExactTokensForTokens!.encodeInput({ amountIn: 1_500_000n, amountOutMin: 2_000_000_000_000_000_000n, path: [usdc, weth], to: '0x0000000000000000000000000000000000005678', deadline: 1n })
 		const stack = createStack()
 		const transaction = stack.transactions[0]!
@@ -353,7 +356,7 @@ describe('Sealwort rendered UI', () => {
 			return `0x${ (to === usdc ? 6n : 18n).toString(16).padStart(64, '0') }`
 		} }
 		try {
-			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: BigInt(UNISWAP_V2_ROUTER_CONTRACT), data } } }] } })
+			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address, data } } }] } })
 			assert.notEqual(await screen.findByText('1.5 USDC'), undefined)
 			assert.notEqual(await screen.findByText('2 WETH'), undefined)
 			assert.notEqual(screen.getByText(/Uniswap V2 Router/u), undefined)
@@ -366,7 +369,7 @@ describe('Sealwort rendered UI', () => {
 	test('expands decoded calls inside a Uniswap V3 multicall', async () => {
 		const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 		const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
-		const router = createContract(CONTRACTS[UNISWAP_V3_ROUTER_CONTRACT]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value?: unknown): Uint8Array }>
+		const router = createContract(UNISWAP_V3_ROUTER_ABI) as unknown as Record<string, { encodeInput(value?: unknown): Uint8Array }>
 		const swap = router.exactInputSingle!.encodeInput({ tokenIn: usdc, tokenOut: weth, fee: 3_000n, recipient: '0x0000000000000000000000000000000000005678', deadline: 1n, amountIn: 1_500_000n, amountOutMinimum: 2_000_000_000_000_000_000n, sqrtPriceLimitX96: 0n })
 		const data = router.multicall!.encodeInput([swap, router.refundETH!.encodeInput()])
 		const stack = createStack()
@@ -379,7 +382,7 @@ describe('Sealwort rendered UI', () => {
 			return `0x${ (to === usdc ? 6n : 18n).toString(16).padStart(64, '0') }`
 		} }
 		try {
-			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: BigInt(UNISWAP_V3_ROUTER_CONTRACT), data } } }] } })
+			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address, data } } }] } })
 			assert.notEqual(screen.getByText('multicall(exactInputSingle, refundETH)'), undefined)
 			assert.notEqual(await screen.findByText('1.5 USDC'), undefined)
 			assert.notEqual(await screen.findByText('2 WETH'), undefined)

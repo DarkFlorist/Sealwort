@@ -1,6 +1,6 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
-import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { createContract, ERC1155, ERC20, ERC721, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
 import { ContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/contractMetadata.js'
 import { decodeTransactionData } from '../src/app/transactionDecoder.js'
@@ -10,7 +10,10 @@ import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { ERC7540_ABI } from '../src/app/abis/erc7540.js'
 import { ERC721_SAFE_TRANSFER_WITH_DATA_ABI } from '../src/app/abis/erc721.js'
+import { KYBER_NETWORK_PROXY_ABI } from '../src/app/abis/kyberNetworkProxy.js'
 import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
+import { UNISWAP_V2_ROUTER_ABI } from '../src/app/abis/uniswapV2Router.js'
+import { UNISWAP_V3_ROUTER_ABI } from '../src/app/abis/uniswapV3Router.js'
 import { getBalanceToken, getRegisteredTokens, getRegisteredTransactionContracts, MAINNET_TRANSACTION_CONTRACTS } from '../src/app/addressRegistry.js'
 import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
 import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
@@ -154,10 +157,8 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('associates swap, vault, permit, and aggregator amounts with their tokens', () => {
-		const v2Address = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'UNISWAP V2 ROUTER')?.[0]
-		assert.ok(v2Address !== undefined)
-		const v2 = createContract(CONTRACTS[v2Address]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
-		const swap = decodeTransactionData(1n, BigInt(v2Address), v2.swapExactTokensForTokens!.encodeInput({ amountIn: 100n, amountOutMin: 90n, path: [firstAddress, secondAddress], to: secondAddress, deadline: 1n }))
+		const v2 = createContract(UNISWAP_V2_ROUTER_ABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const swap = decodeTransactionData(1n, MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address, v2.swapExactTokensForTokens!.encodeInput({ amountIn: 100n, amountOutMin: 90n, path: [firstAddress, secondAddress], to: secondAddress, deadline: 1n }))
 		assert.deepEqual(swap.status === 'decoded' ? amountTokenReferences(swap.call) : [], [BigInt(firstAddress), BigInt(secondAddress)])
 
 		const vault = createContract(ERC4626_ABI)
@@ -174,18 +175,14 @@ describe('transaction calldata parsing', () => {
 		const decodedMetaMask = decodeTransactionData(1n, mainnetMetaMaskSwapRouterAddress(), metaMask)
 		assert.deepEqual(decodedMetaMask.status === 'decoded' ? amountTokenReferences(decodedMetaMask.call) : [], [BigInt(firstAddress)])
 
-		const kyberAddress = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'KYBER NETWORK PROXY')?.[0]
-		assert.ok(kyberAddress !== undefined)
-		const kyber = createContract(CONTRACTS[kyberAddress]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const kyber = createContract(KYBER_NETWORK_PROXY_ABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const nativeAsset = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-		const trade = decodeTransactionData(1n, BigInt(kyberAddress), kyber.trade!.encodeInput({ src: firstAddress, srcAmount: 100n, dest: nativeAsset, destAddress: secondAddress, maxDestAmount: 90n, minConversionRate: 1n, platformWallet: secondAddress }))
+		const trade = decodeTransactionData(1n, MAINNET_TRANSACTION_CONTRACTS.kyberNetworkProxy.address, kyber.trade!.encodeInput({ src: firstAddress, srcAmount: 100n, dest: nativeAsset, destAddress: secondAddress, maxDestAmount: 90n, minConversionRate: 1n, platformWallet: secondAddress }))
 		assert.deepEqual(trade.status === 'decoded' ? amountTokenReferences(trade.call) : [], [BigInt(firstAddress), 'native'])
 	})
 
 	test('uses Uniswap V3 exact-output paths in their required reversed encoding', () => {
-		const v3Address = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'UNISWAP V3 ROUTER')?.[0]
-		assert.ok(v3Address !== undefined)
-		const router = createContract(CONTRACTS[v3Address]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const router = createContract(UNISWAP_V3_ROUTER_ABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const middle = '0x0000000000000000000000000000000000003333'
 		const exactOutput = router.exactOutput!.encodeInput({
 			path: encodedV3Path([secondAddress, middle, firstAddress]),
@@ -194,11 +191,11 @@ describe('transaction calldata parsing', () => {
 			amountOut: 90n,
 			amountInMaximum: 100n,
 		})
-		const decoded = decodeTransactionData(1n, BigInt(v3Address), exactOutput)
+		const decoded = decodeTransactionData(1n, MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address, exactOutput)
 		assert.deepEqual(decoded.status === 'decoded' ? amountTokenReferences(decoded.call) : [], [BigInt(secondAddress), BigInt(firstAddress)])
 
 		const multicall = router.multicall!.encodeInput([exactOutput])
-		const nested = decodeTransactionData(1n, BigInt(v3Address), multicall)
+		const nested = decodeTransactionData(1n, MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address, multicall)
 		assert.deepEqual(nested.status === 'decoded' ? amountTokenReferences(nested.call) : [], [BigInt(secondAddress), BigInt(firstAddress)])
 	})
 
@@ -247,8 +244,13 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('keeps registered transaction contracts synchronized with decoder definitions', () => {
-		const registered = getRegisteredTransactionContracts(1n).map(({ address }) => address).sort()
-		const decoded = TRANSACTION_DEFINITIONS.flatMap(({ deployment }) => deployment === undefined ? [] : [deployment.address]).sort()
-		assert.deepEqual(decoded, registered)
+		const registered = getRegisteredTransactionContracts(1n)
+		const deployedDefinitions = TRANSACTION_DEFINITIONS.filter(({ deployment }) => deployment !== undefined)
+		assert.deepEqual(deployedDefinitions.map(({ deployment }) => deployment!.address).sort(), registered.map(({ address }) => address).sort())
+		for (const contract of registered) {
+			const definition = deployedDefinitions.find(({ deployment }) => deployment === contract)
+			assert.ok(definition !== undefined, `${ contract.label } must bind its exact registry object to a decoder definition`)
+			assert.ok(definition.abi.length > 0, `${ contract.label } must have an app-owned ABI`)
+		}
 	})
 })
