@@ -715,6 +715,13 @@ svg.spinner > circle {
 	overflow-wrap: anywhere;
 }
 
+.decoded-nested {
+	display: grid;
+	gap: 0.35rem;
+	padding-left: 0.7rem;
+	border-left: 1px solid rgba(135, 148, 177, 0.22);
+}
+
 .raw-data {
 	color: #c9d4ef;
 	font-size: 0.82rem;

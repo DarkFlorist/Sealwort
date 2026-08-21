@@ -8,7 +8,8 @@ import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
-import { createContract, ERC20 } from 'micro-eth-signer/advanced/abi.js'
+import { CONTRACTS, createContract, ERC20, UNISWAP_V2_ROUTER_CONTRACT, UNISWAP_V3_ROUTER_CONTRACT, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { dataStringWith0xStart } from '../src/app/ethereum.js'
 
 afterEach(cleanup)
@@ -199,6 +200,79 @@ describe('Sealwort rendered UI', () => {
 
 		assert.match(screen.getByText(/\(WETH\)/u).textContent ?? '', /WETH/u)
 		assert.equal(screen.getAllByText(/\(connected wallet\)/u).length > 0, true)
+	})
+
+	test('formats both sides of a Uniswap V2 swap with known token metadata', async () => {
+		const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+		const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+		const router = createContract(CONTRACTS[UNISWAP_V2_ROUTER_CONTRACT]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const data = router.swapExactTokensForTokens!.encodeInput({ amountIn: 1_500_000n, amountOutMin: 2_000_000_000_000_000_000n, path: [usdc, weth], to: '0x0000000000000000000000000000000000005678', deadline: 1n })
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method, params }) => {
+			if (method === 'eth_chainId') return '0x1'
+			const call = params?.[0]
+			const to = typeof call === 'object' && call !== null && 'to' in call ? call.to : undefined
+			return `0x${ (to === usdc ? 6n : 18n).toString(16).padStart(64, '0') }`
+		} }
+		try {
+			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: BigInt(UNISWAP_V2_ROUTER_CONTRACT), data } } }] } })
+			assert.notEqual(await screen.findByText('1.5 USDC'), undefined)
+			assert.notEqual(await screen.findByText('2 WETH'), undefined)
+			assert.notEqual(screen.getByText(/Uniswap V2 Router/u), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('expands decoded calls inside a Uniswap V3 multicall', async () => {
+		const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+		const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+		const router = createContract(CONTRACTS[UNISWAP_V3_ROUTER_CONTRACT]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value?: unknown): Uint8Array }>
+		const swap = router.exactInputSingle!.encodeInput({ tokenIn: usdc, tokenOut: weth, fee: 3_000n, recipient: '0x0000000000000000000000000000000000005678', deadline: 1n, amountIn: 1_500_000n, amountOutMinimum: 2_000_000_000_000_000_000n, sqrtPriceLimitX96: 0n })
+		const data = router.multicall!.encodeInput([swap, router.refundETH!.encodeInput()])
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method, params }) => {
+			if (method === 'eth_chainId') return '0x1'
+			const call = params?.[0]
+			const to = typeof call === 'object' && call !== null && 'to' in call ? call.to : undefined
+			return `0x${ (to === usdc ? 6n : 18n).toString(16).padStart(64, '0') }`
+		} }
+		try {
+			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: BigInt(UNISWAP_V3_ROUTER_CONTRACT), data } } }] } })
+			assert.notEqual(screen.getByText('multicall(exactInputSingle, refundETH)'), undefined)
+			assert.notEqual(await screen.findByText('1.5 USDC'), undefined)
+			assert.notEqual(await screen.findByText('2 WETH'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('reads an ERC-4626 vault asset before formatting asset amounts', async () => {
+		const dai = '0x6b175474e89094c44da98b954eedeac495271d0f'
+		const vaultAddress = 0x9999n
+		const data = createContract(ERC4626_ABI).deposit.encodeInput({ assets: 2_000_000_000_000_000_000n, receiver: '0x0000000000000000000000000000000000005678' })
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		let calls = 0
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0x1'
+			calls += 1
+			return calls === 1 ? `0x${ dai.slice(2).padStart(64, '0') }` : `0x${ 18n.toString(16).padStart(64, '0') }`
+		} }
+		try {
+			renderStack({ stack: { ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: vaultAddress, data } } }] } })
+			assert.notEqual(await screen.findByText('2 DAI'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
 	})
 
 	test('asks a connected Safe wallet user to review the transaction before approval', () => {

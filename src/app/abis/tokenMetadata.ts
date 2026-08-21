@@ -1,5 +1,10 @@
 export const TOKEN_METADATA_ABI = [{
 	type: 'function',
+	name: 'asset',
+	inputs: [],
+	outputs: [{ name: 'assetTokenAddress', type: 'address' }],
+}, {
+	type: 'function',
 	name: 'balanceOf',
 	inputs: [{ name: 'owner', type: 'address' }],
 	outputs: [{ name: 'balance', type: 'uint256' }],
