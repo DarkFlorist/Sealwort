@@ -1,6 +1,6 @@
 import * as funtypes from 'funtypes'
+import { getBalanceToken, getNativeAssetIdentity } from './addressRegistry.js'
 import { getNativeAssetSymbol } from './assetFormatting.js'
-import { getChainConfiguration } from './chainConfiguration.js'
 import { readTokenBalance } from './contractMetadata.js'
 import { addressString } from './ethereum.js'
 import type { InjectedProvider } from './safeStackValidation.js'
@@ -41,10 +41,9 @@ type ChainBalanceConfiguration = {
 }
 
 function getChainBalanceConfiguration(chainId: bigint): ChainBalanceConfiguration {
-	const configuration = getChainConfiguration(chainId)
-	return configuration.balanceTokens === undefined
-		? { nativeSymbol: configuration.nativeSymbol }
-		: { nativeSymbol: configuration.nativeSymbol, usdc: configuration.balanceTokens.usdc }
+	const nativeSymbol = getNativeAssetIdentity(chainId).symbol
+	const usdc = getBalanceToken(chainId, 'usdc')
+	return usdc === undefined ? { nativeSymbol } : { nativeSymbol, usdc: { symbol: usdc.symbol, address: usdc.address } }
 }
 
 function parseEthereumQuantity(value: unknown, label: string) {

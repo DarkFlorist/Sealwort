@@ -1,5 +1,5 @@
 import { abiFunctionSignatures } from './abiSignatures.js'
-import { NATIVE_TOKEN_SENTINEL } from './chainConfiguration.js'
+import { NATIVE_TOKEN_SENTINEL } from './addressRegistry.js'
 import { bytesToHex } from './ethereum.js'
 import type { DecodedTransactionData, TransactionDataDecodeResult } from './transactionDecoder.js'
 import { TRANSACTION_DEFINITIONS, type AmountTokenReference, type FunctionRule, type TokenSource } from './transactionDefinitions.js'

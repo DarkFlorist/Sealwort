@@ -11,10 +11,10 @@ import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { ERC7540_ABI } from '../src/app/abis/erc7540.js'
 import { ERC721_SAFE_TRANSFER_WITH_DATA_ABI } from '../src/app/abis/erc721.js'
 import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
-import { getChainConfiguration } from '../src/app/chainConfiguration.js'
+import { getBalanceToken, getRegisteredTokens, getRegisteredTransactionContracts, MAINNET_TRANSACTION_CONTRACTS } from '../src/app/addressRegistry.js'
 import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
 import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
-import { MAINNET_METAMASK_SWAP_ROUTER } from '../src/app/addressRegistry.js'
+import { TRANSACTION_DEFINITIONS } from '../src/app/transactionDefinitions.js'
 
 const destination = 0x1234n
 const firstAddress = '0x0000000000000000000000000000000000001111'
@@ -26,7 +26,7 @@ function encodedV3Path(tokens: readonly string[]) {
 }
 
 function mainnetMetaMaskSwapRouterAddress() {
-	return MAINNET_METAMASK_SWAP_ROUTER.address
+	return MAINNET_TRANSACTION_CONTRACTS.metaMaskSwapRouter.address
 }
 
 type AbiInput = { readonly name?: string, readonly type: string, readonly components?: readonly AbiInput[] }
@@ -231,10 +231,16 @@ describe('transaction calldata parsing', () => {
 
 	test('uses one address registry for token labels and balance symbols', () => {
 		const expectedTokens = ['UNI', 'BAT', 'USDT', 'USDC', 'WETH', 'WBTC', 'DAI', 'COMP', 'MKR', 'AMPL']
-		assert.deepEqual(getChainConfiguration(1n).tokens.map(({ symbol }) => symbol), expectedTokens)
-		for (const { address, symbol } of getChainConfiguration(1n).tokens) assert.equal(getAddressLabel(address, 1n), symbol)
-		const sepoliaUsdc = getChainConfiguration(11155111n).balanceTokens?.usdc
+		assert.deepEqual(getRegisteredTokens(1n).map(({ symbol }) => symbol), expectedTokens)
+		for (const { address, label } of getRegisteredTokens(1n)) assert.equal(getAddressLabel(address, 1n), label)
+		const sepoliaUsdc = getBalanceToken(11155111n, 'usdc')
 		assert.ok(sepoliaUsdc !== undefined)
-		assert.equal(getAddressLabel(sepoliaUsdc.address, 11155111n), sepoliaUsdc.symbol)
+		assert.equal(getAddressLabel(sepoliaUsdc.address, 11155111n), sepoliaUsdc.label)
+	})
+
+	test('keeps registered transaction contracts synchronized with decoder definitions', () => {
+		const registered = getRegisteredTransactionContracts(1n).map(({ address }) => address).sort()
+		const decoded = TRANSACTION_DEFINITIONS.flatMap(({ deployment }) => deployment === undefined ? [] : [deployment.address]).sort()
+		assert.deepEqual(decoded, registered)
 	})
 })

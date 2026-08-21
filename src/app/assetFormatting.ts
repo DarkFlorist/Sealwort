@@ -1,7 +1,7 @@
-import { getChainConfiguration } from './chainConfiguration.js'
+import { getNativeAssetIdentity } from './addressRegistry.js'
 
 export function getNativeAssetSymbol(chainId: bigint) {
-	return getChainConfiguration(chainId).nativeSymbol
+	return getNativeAssetIdentity(chainId).symbol
 }
 
 export function formatTokenBalance(value: bigint, decimals: number, maximumFractionDigits = 6) {

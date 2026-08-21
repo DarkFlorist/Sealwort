@@ -1,5 +1,5 @@
 import { type ContractABI } from 'micro-eth-signer/advanced/abi.js'
-import { ETHEREUM_MAINNET_CHAIN_ID } from './chainConfiguration.js'
+import { ETHEREUM_MAINNET_CHAIN_ID } from './addressRegistry.js'
 import { addressString } from './ethereum.js'
 import { TRANSACTION_DEFINITIONS, transactionDefinitionForAddress } from './transactionDefinitions.js'
 

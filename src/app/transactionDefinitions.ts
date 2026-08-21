@@ -5,7 +5,7 @@ import { ERC4626_ABI } from './abis/erc4626.js'
 import { ERC7540_ABI } from './abis/erc7540.js'
 import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
 import { microDecoderContractAbi } from './abis/microDecoder.js'
-import { MAINNET_KYBER_NETWORK_PROXY, MAINNET_METAMASK_SWAP_ROUTER, MAINNET_UNISWAP_V2_ROUTER, MAINNET_UNISWAP_V3_ROUTER, type RegisteredAddress } from './addressRegistry.js'
+import { MAINNET_TRANSACTION_CONTRACTS, type RegisteredTransactionContract } from './addressRegistry.js'
 
 export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
 export type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: 'first' | 'last' }
@@ -24,7 +24,7 @@ export type TransactionDefinition = {
 	readonly abi: ContractABI
 	readonly functions?: readonly FunctionRuleDefinition[]
 	readonly nestedAmounts?: readonly NestedAmountRuleDefinition[]
-	readonly deployment?: RegisteredAddress
+	readonly deployment?: RegisteredTransactionContract
 }
 
 const field = (name: string): TokenSource => ({ field: name })
@@ -33,7 +33,7 @@ const functionRule = (names: readonly string[], amounts: AmountRules): FunctionR
 // Uniswap V3 exact-output paths are encoded backwards: output token first, input token last.
 const exactOutputPathAmounts = { amountOut: path('first'), amountInMaximum: path('last') } as const
 
-function deployedDefinition(deployment: RegisteredAddress, abi: ContractABI | undefined, functions: readonly FunctionRuleDefinition[], nestedAmounts?: readonly NestedAmountRuleDefinition[]): readonly TransactionDefinition[] {
+function deployedDefinition(deployment: RegisteredTransactionContract, abi: ContractABI | undefined, functions: readonly FunctionRuleDefinition[], nestedAmounts?: readonly NestedAmountRuleDefinition[]): readonly TransactionDefinition[] {
 	return abi === undefined ? [] : [{ abi, functions, ...(nestedAmounts === undefined ? {} : { nestedAmounts }), deployment }]
 }
 
@@ -67,6 +67,25 @@ const uniswapV3NestedRules = [
 	{ fields: ['path', 'amountOut', 'amountInMaximum'], rules: exactOutputPathAmounts },
 ] as const
 
+type AddressBoundInterpretation = {
+	readonly abi: ContractABI | undefined
+	readonly functions: readonly FunctionRuleDefinition[]
+	readonly nestedAmounts?: readonly NestedAmountRuleDefinition[]
+}
+
+const MAINNET_TRANSACTION_INTERPRETATIONS = {
+	uniswapV2Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address), functions: uniswapV2Rules },
+	uniswapV3Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address), functions: uniswapV3Rules, nestedAmounts: uniswapV3NestedRules },
+	kyberNetworkProxy: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.kyberNetworkProxy.address), functions: [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })] },
+	metaMaskSwapRouter: { abi: METAMASK_SWAP_ROUTER_ABI, functions: [functionRule(['swap'], { amount: field('tokenFrom') })] },
+} as const satisfies Readonly<Record<keyof typeof MAINNET_TRANSACTION_CONTRACTS, AddressBoundInterpretation>>
+
+const MAINNET_TRANSACTION_DEFINITIONS = (Object.keys(MAINNET_TRANSACTION_CONTRACTS) as (keyof typeof MAINNET_TRANSACTION_CONTRACTS)[]).flatMap((name) => {
+	const deployment = MAINNET_TRANSACTION_CONTRACTS[name]
+	const interpretation: AddressBoundInterpretation = MAINNET_TRANSACTION_INTERPRETATIONS[name]
+	return deployedDefinition(deployment, interpretation.abi, interpretation.functions, interpretation.nestedAmounts)
+})
+
 export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 	{ abi: ERC20, functions: [functionRule(['transfer', 'approve', 'transferFrom'], { value: 'destination' })] },
 	{ abi: ERC721 },
@@ -82,10 +101,7 @@ export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 		functionRule(['transferFromWithReferenceAndFee'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') }),
 		{ names: ['safeTransferFrom'], rule: { amounts: { amount: field('tokenAddress') }, ambiguity: { erc721Arguments: ['from', 'to', 'tokenId'], fallbackArguments: ['_tokenAddress', '_to', '_amount'] } } },
 	] },
-	...deployedDefinition(MAINNET_UNISWAP_V2_ROUTER, microDecoderContractAbi(MAINNET_UNISWAP_V2_ROUTER.address), uniswapV2Rules),
-	...deployedDefinition(MAINNET_UNISWAP_V3_ROUTER, microDecoderContractAbi(MAINNET_UNISWAP_V3_ROUTER.address), uniswapV3Rules, uniswapV3NestedRules),
-	...deployedDefinition(MAINNET_KYBER_NETWORK_PROXY, microDecoderContractAbi(MAINNET_KYBER_NETWORK_PROXY.address), [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })]),
-	...deployedDefinition(MAINNET_METAMASK_SWAP_ROUTER, METAMASK_SWAP_ROUTER_ABI, [functionRule(['swap'], { amount: field('tokenFrom') })]),
+	...MAINNET_TRANSACTION_DEFINITIONS,
 ]
 
 export function transactionDefinitionForAddress(chainId: bigint, address: bigint) {
