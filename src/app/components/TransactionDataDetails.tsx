@@ -1,24 +1,9 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
-import { getNativeAssetSymbol } from '../accountBalances.js'
+import { useState } from 'preact/hooks'
+import { getNativeAssetSymbol } from '../assetFormatting.js'
 import { getAddressLabel, identifiedAddress } from '../addressLabels.js'
-import { getSafeReadProvider } from '../readProvider.js'
-import { amountTokenForArgument, amountTokenReferences, decodedArguments, decodeTransactionData, formatDecodedValue, formatTokenAmount, hasErc721AmountAmbiguity, isContractMetadataUnavailableError, rawTransactionData, readIsErc721, readTokenDecimals, readVaultAsset, type AmountTokenReference } from '../transactionData.js'
-import { getUserFacingErrorMessage } from '../userFacingErrors.js'
-
-type TokenState = { readonly status: 'available', readonly decimals: number } | { readonly status: 'nft' } | { readonly status: 'error', readonly message: string }
-type AmountMetadataState =
-	| { readonly status: 'idle' | 'loading' }
-	| { readonly status: 'failed', readonly message: string }
-	| { readonly status: 'ready', readonly vaultAsset: bigint | undefined, readonly vaultAssetError: string | undefined, readonly tokens: Readonly<Record<string, TokenState>> }
-
-type SettledResult<T> = { readonly status: 'fulfilled', readonly value: T } | { readonly status: 'rejected', readonly reason: unknown }
-
-async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
-	const [result] = await Promise.allSettled([promise])
-	if (result === undefined) throw new Error('Promise settlement did not return a result.')
-	return result
-}
+import { amountTokenForArgument, decodedArguments, formatDecodedValue, formatTokenAmount, rawTransactionData, type AmountTokenReference } from '../transactionData.js'
+import { useTransactionDataMetadata, type TransactionAmountMetadataState } from '../useTransactionDataMetadata.js'
 
 function argumentAddress(value: unknown) {
 	return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/u.test(value) ? BigInt(value) : undefined
@@ -101,72 +86,24 @@ function tokenKey(address: bigint) {
 	return address.toString(16)
 }
 
-function resolvedTokenAddress(reference: AmountTokenReference, destination: bigint, metadata: AmountMetadataState) {
+function resolvedTokenAddress(reference: AmountTokenReference, destination: bigint, metadata: TransactionAmountMetadataState) {
 	if (reference === 'liquidity' || reference === 'native') return reference
 	if (reference === 'destination') return destination
 	if (reference === 'vaultAsset') return metadata.status === 'ready' ? metadata.vaultAsset : undefined
 	return reference
 }
 
-export function TransactionDataDetails({ data, destination, transactionValue, chainId, connectedAccount }: {
+export function TransactionDataDetails({ data, destination, transactionValue, chainId, connectedAccount, walletRequestTimeoutMs }: {
 	readonly data: Uint8Array
 	readonly destination: bigint
 	readonly transactionValue: bigint
 	readonly chainId: bigint
 	readonly connectedAccount: bigint | undefined
+	readonly walletRequestTimeoutMs: number | undefined
 }) {
 	const [showParsed, setShowParsed] = useState(true)
-	const decoded = decodeTransactionData(destination, data)
-	const references = decoded.status === 'decoded' ? amountTokenReferences(decoded.call) : []
-	const [metadata, setMetadata] = useState<AmountMetadataState>({ status: 'idle' })
+	const { decoded, metadata } = useTransactionDataMetadata(destination, data, chainId, walletRequestTimeoutMs)
 	const raw = rawTransactionData(data)
-
-	useEffect(() => {
-		if (decoded.status !== 'decoded' || references.length === 0 || references.every((reference) => reference === 'native' || reference === 'liquidity')) {
-			setMetadata({ status: 'idle' })
-			return
-		}
-		let current = true
-		setMetadata({ status: 'loading' })
-		void getSafeReadProvider(chainId, window.ethereum).then(async ({ provider }) => {
-			let vaultAsset: bigint | undefined
-			let vaultAssetError: string | undefined
-			if (references.includes('vaultAsset')) {
-				const assetResult = await settle(readVaultAsset(provider, destination))
-				if (assetResult.status === 'fulfilled') vaultAsset = assetResult.value
-				else vaultAssetError = isContractMetadataUnavailableError(assetResult.reason)
-					? 'Could not read this vault’s asset.'
-					: getUserFacingErrorMessage(assetResult.reason)
-			}
-			const addresses = references.flatMap((reference) => {
-				if (reference === 'native' || reference === 'liquidity') return []
-				if (reference === 'destination') return [destination]
-				if (reference === 'vaultAsset') return vaultAsset === undefined ? [] : [vaultAsset]
-				return [reference]
-			}).filter((address, index, all) => all.indexOf(address) === index)
-			const entries = await Promise.all(addresses.map(async (address) => {
-				const decimalsResult = await settle(readTokenDecimals(provider, address))
-				if (decimalsResult.status === 'fulfilled') return [tokenKey(address), { status: 'available', decimals: decimalsResult.value } satisfies TokenState] as const
-				if (!isContractMetadataUnavailableError(decimalsResult.reason)) {
-					return [tokenKey(address), { status: 'error', message: getUserFacingErrorMessage(decimalsResult.reason) } satisfies TokenState] as const
-				}
-				if (hasErc721AmountAmbiguity(decoded.call)) {
-					const nftResult = await settle(readIsErc721(provider, address))
-					if (nftResult.status === 'fulfilled' && nftResult.value) return [tokenKey(address), { status: 'nft' } satisfies TokenState] as const
-					if (nftResult.status === 'rejected' && !isContractMetadataUnavailableError(nftResult.reason)) {
-						return [tokenKey(address), { status: 'error', message: getUserFacingErrorMessage(nftResult.reason) } satisfies TokenState] as const
-					}
-				}
-				return [tokenKey(address), { status: 'error', message: 'Could not read this token’s decimals.' } satisfies TokenState] as const
-			}))
-			return { status: 'ready', vaultAsset, vaultAssetError, tokens: Object.fromEntries(entries) } as const
-		}).then((nextState) => {
-			if (current) setMetadata(nextState)
-		}, (metadataError: unknown) => {
-			if (current) setMetadata({ status: 'failed', message: getUserFacingErrorMessage(metadataError) })
-		})
-		return () => { current = false }
-	}, [chainId, destination, raw])
 
 	const renderAmount = (value: bigint, reference: AmountTokenReference) => {
 		const address = resolvedTokenAddress(reference, destination, metadata)
@@ -215,8 +152,9 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 						? <span class = 'data-parse-error'>Invalid calldata: { decoded.error }</span>
 						: <div class = 'decoded-call'>
 							<strong>{ decoded.call.name }</strong>
+							{ metadata.status === 'failed' ? <div class = 'data-parse-error'>{ metadata.message }</div> : <></> }
 							{ decoded.call.signature === 'deposit()' ? <dl><dt>Amount</dt><dd>{ formatTokenAmount(transactionValue, 18, getAddressLabel(destination, chainId) ?? 'WETH') }</dd></dl> : <></> }
-							{ decodedArguments(decoded.call).length === 0 ? <></> : Array.isArray(decoded.call.arguments)
+							{ decoded.call.ambiguity !== undefined ? <span class = 'muted'>Identifying transfer…</span> : decodedArguments(decoded.call).length === 0 ? <></> : Array.isArray(decoded.call.arguments)
 								? <div class = 'decoded-nested'>{ decoded.call.arguments.map((value, index) => isRecord(value) ? <dl key = { index }>{ renderFields(value, `argument:${ index }`) }</dl> : <div key = { index }>{ displayDecodedValue(value, chainId, connectedAccount) }</div>) }</div>
 								: <dl>{ renderFields(decoded.call.arguments as Readonly<Record<string, unknown>>, 'argument') }</dl> }
 						</div>

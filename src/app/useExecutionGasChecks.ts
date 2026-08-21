@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { getNativeAssetSymbol } from './accountBalances.js'
+import { getNativeAssetSymbol } from './assetFormatting.js'
 import type { ConnectedSafeWalletSigner, ExecutionGasCheck } from './appTypes.js'
 import { readSafeExecutionGasFunding } from './safeExecution.js'
 import type { SafeStackExport } from './safeStackProtocol.js'

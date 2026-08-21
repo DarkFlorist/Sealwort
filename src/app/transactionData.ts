@@ -1,5 +1,5 @@
 import { createContract, Decoder, type ContractABI, type SignatureInfo } from 'micro-eth-signer/advanced/abi.js'
-import { formatTokenBalance } from './accountBalances.js'
+import { formatTokenBalance } from './assetFormatting.js'
 import { ERC721_INTERFACE_ID } from './abis/erc721Interface.js'
 import { TOKEN_METADATA_ABI } from './abis/tokenMetadata.js'
 import { transactionAbisForDestination } from './abis/transaction.js'
@@ -24,6 +24,7 @@ export type DecodedTransactionData = {
 	readonly name: string
 	readonly signature: string
 	readonly arguments: Readonly<Record<string, unknown>> | readonly unknown[] | undefined
+	readonly ambiguity?: 'erc721-or-token-helper'
 }
 
 export type TransactionDataDecodeResult =
@@ -43,13 +44,20 @@ export function decodeTransactionData(destination: bigint, data: Uint8Array): Tr
 		const decoded = decodeWithTransactionAbis(destination, data)
 		if (decoded.length === 0) return { status: 'unknown' }
 		const candidates = uniqueCandidates(decoded)
-		// The requested payment helper shares its selector with ERC-721's three-argument
-		// safeTransferFrom. Prefer the helper's descriptive argument names; the four-
-		// argument ERC-721 overload remains unambiguous.
-		const call = candidates[0]?.signature === 'safeTransferFrom(address,address,uint256)'
-			? [...decoded].reverse().find(({ signature }) => signature === 'safeTransferFrom(address,address,uint256)')
-			: candidates[0]
+		const call = candidates[0]
 		if (call === undefined) return { status: 'unknown' }
+		if (call.signature === 'safeTransferFrom(address,address,uint256)') {
+			const values = Array.isArray(call.value) ? call.value : Object.values(call.value ?? {})
+			return {
+				status: 'decoded',
+				call: {
+					name: call.name,
+					signature: call.signature,
+					arguments: { address1: values[0], recipient: values[1], value: values[2] },
+					ambiguity: 'erc721-or-token-helper',
+				},
+			}
+		}
 		return {
 			status: 'decoded',
 			call: {
@@ -61,6 +69,14 @@ export function decodeTransactionData(destination: bigint, data: Uint8Array): Tr
 	} catch (decodeError) {
 		return { status: 'error', error: decodeError instanceof Error ? decodeError.message : 'Calldata is malformed.' }
 	}
+}
+
+export function resolveAmbiguousSafeTransfer(call: DecodedTransactionData, interpretation: 'erc721' | 'token-helper'): DecodedTransactionData {
+	if (call.ambiguity !== 'erc721-or-token-helper' || !isRecord(call.arguments)) return call
+	const { address1, recipient, value } = call.arguments
+	return interpretation === 'erc721'
+		? { name: call.name, signature: call.signature, arguments: { from: address1, to: recipient, tokenId: value } }
+		: { name: call.name, signature: call.signature, arguments: { _tokenAddress: address1, _to: recipient, _amount: value } }
 }
 
 export function decodedArguments(call: DecodedTransactionData): readonly { readonly name: string, readonly value: unknown }[] {

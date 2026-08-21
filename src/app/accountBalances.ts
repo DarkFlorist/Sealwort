@@ -1,6 +1,7 @@
 import * as funtypes from 'funtypes'
 import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { TOKEN_METADATA_ABI } from './abis/tokenMetadata.js'
+import { getNativeAssetSymbol } from './assetFormatting.js'
 import { addressString, bytesFromHex, bytesToHex, ensureHex } from './ethereum.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
@@ -43,10 +44,6 @@ type ChainBalanceConfiguration = {
 		readonly symbol: string
 		readonly address: bigint
 	}
-}
-
-export function getNativeAssetSymbol(chainId: bigint) {
-	return chainId === ETHEREUM_SEPOLIA_CHAIN_ID ? 'SepoliaETH' : 'ETH'
 }
 
 function getChainBalanceConfiguration(chainId: bigint): ChainBalanceConfiguration {
@@ -125,19 +122,4 @@ export async function readConnectedSafeBalances(provider: InjectedProvider, safe
 			balance: usdcBalance,
 		},
 	}
-}
-
-export function formatTokenBalance(value: bigint, decimals: number, maximumFractionDigits = 6) {
-	if (!Number.isSafeInteger(decimals) || decimals < 0) throw new Error('Token decimals must be a non-negative integer.')
-	if (!Number.isSafeInteger(maximumFractionDigits) || maximumFractionDigits < 0) throw new Error('Maximum fraction digits must be a non-negative integer.')
-	if (value < 0n) throw new Error('Token balance cannot be negative.')
-	const unit = 10n ** BigInt(decimals)
-	const integerPart = value / unit
-	const fractionDigits = Math.min(decimals, maximumFractionDigits)
-	if (fractionDigits === 0) return integerPart.toString()
-	const visibleFractionUnit = 10n ** BigInt(decimals - fractionDigits)
-	const visibleFractionValue = value % unit / visibleFractionUnit
-	if (integerPart === 0n && visibleFractionValue === 0n && value !== 0n) return `<0.${ '0'.repeat(fractionDigits - 1) }1`
-	const visibleFraction = visibleFractionValue.toString().padStart(fractionDigits, '0').replace(/0+$/u, '')
-	return visibleFraction.length === 0 ? integerPart.toString() : `${ integerPart.toString() }.${ visibleFraction }`
 }

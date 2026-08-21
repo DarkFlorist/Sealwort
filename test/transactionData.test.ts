@@ -1,8 +1,8 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
-import { CONTRACTS, createContract, ERC1155, ERC20, TOKENS, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, TOKENS, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
-import { amountTokenReferences, ContractMetadataUnavailableError, decodeTransactionData, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/transactionData.js'
+import { amountTokenReferences, ContractMetadataUnavailableError, decodeTransactionData, readIsErc721, readTokenDecimals, readVaultAsset, resolveAmbiguousSafeTransfer } from '../src/app/transactionData.js'
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
@@ -89,7 +89,18 @@ describe('transaction calldata parsing', () => {
 		]
 		for (const data of calls) assert.equal(decodeTransactionData(destination, data).status, 'decoded')
 		const safeTransfer = decodeTransactionData(destination, calls[1]!)
-		assert.equal(safeTransfer.status === 'decoded' && Object.hasOwn(safeTransfer.call.arguments ?? {}, '_tokenAddress'), true)
+		assert.equal(safeTransfer.status === 'decoded' && safeTransfer.call.ambiguity, 'erc721-or-token-helper')
+		assert.equal(safeTransfer.status === 'decoded' && Object.hasOwn(resolveAmbiguousSafeTransfer(safeTransfer.call, 'token-helper').arguments ?? {}, '_tokenAddress'), true)
+	})
+
+	test('resolves the shared safeTransferFrom selector without depending on ABI order', () => {
+		const erc721 = createContract(ERC721) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const data = erc721['safeTransferFrom(address,address,uint256)']!.encodeInput({ from: firstAddress, to: secondAddress, tokenId: 42n })
+		const decoded = decodeTransactionData(destination, data)
+		assert.equal(decoded.status, 'decoded')
+		if (decoded.status !== 'decoded') return
+		assert.deepEqual(resolveAmbiguousSafeTransfer(decoded.call, 'erc721').arguments, { from: firstAddress, to: secondAddress, tokenId: 42n })
+		assert.deepEqual(resolveAmbiguousSafeTransfer(decoded.call, 'token-helper').arguments, { _tokenAddress: firstAddress, _to: secondAddress, _amount: 42n })
 	})
 
 	test('detects ERC-721 through ERC-165 when fungible decimals are absent', async () => {

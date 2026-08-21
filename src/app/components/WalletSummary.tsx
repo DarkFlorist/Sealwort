@@ -1,5 +1,6 @@
 import type { ConnectedAccountInformation } from '../accountInspection.js'
-import { formatTokenBalance, getNativeAssetSymbol, type AssetBalance, type ConnectedSafeBalances, type NativeAssetBalance } from '../accountBalances.js'
+import type { AssetBalance, ConnectedSafeBalances, NativeAssetBalance } from '../accountBalances.js'
+import { formatTokenBalance, getNativeAssetSymbol } from '../assetFormatting.js'
 import { identifiedAddress } from '../addressLabels.js'
 import { LoadingIndicator } from '../Spinner.js'
 

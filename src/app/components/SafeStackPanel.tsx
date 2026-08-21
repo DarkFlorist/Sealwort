@@ -1,6 +1,7 @@
 import type { ConnectedAccountInformation } from '../accountInspection.js'
 import { getStackAccountCompatibility } from '../accountInspection.js'
-import { formatTokenBalance, getNativeAssetSymbol, getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../accountBalances.js'
+import { getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../accountBalances.js'
+import { formatTokenBalance, getNativeAssetSymbol } from '../assetFormatting.js'
 import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type SubmittedExecution, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
 import { identifiedAddress } from '../addressLabels.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
@@ -68,6 +69,7 @@ export function SafeStackPanel({
 	busy,
 	submittedExecutions,
 	transactionActionErrors,
+	walletRequestTimeoutMs,
 	onSign,
 	onExecute,
 }: {
@@ -89,6 +91,7 @@ export function SafeStackPanel({
 	readonly busy: boolean
 	readonly submittedExecutions: readonly SubmittedExecution[]
 	readonly transactionActionErrors: readonly TransactionActionError[]
+	readonly walletRequestTimeoutMs: number | undefined
 	readonly onSign: (transactionIndex: number, executeAfterSigning: boolean) => void
 	readonly onExecute: (transactionIndex: number) => void
 }) {
@@ -225,7 +228,7 @@ export function SafeStackPanel({
 					<dt>Gas price</dt><dd>{ transaction.safeTx.message.gasPrice === 0n ? 'Gas refund disabled' : `${ transaction.safeTx.message.gasPrice.toString() } wei` }</dd>
 					<dt>Gas token</dt><dd class = { transaction.safeTx.message.gasToken === ZERO_ADDRESS ? undefined : 'address' }>{ transaction.safeTx.message.gasToken === ZERO_ADDRESS ? transaction.safeTx.message.gasPrice === 0n ? 'Not enabled' : 'Native token' : identifiedAddress(transaction.safeTx.message.gasToken, stack.chainId, account) }</dd>
 					<dt>Refund receiver</dt><dd class = { transaction.safeTx.message.refundReceiver === ZERO_ADDRESS ? undefined : 'address' }>{ transaction.safeTx.message.refundReceiver === ZERO_ADDRESS ? transaction.safeTx.message.gasPrice === 0n ? 'Not enabled' : 'Transaction sender' : identifiedAddress(transaction.safeTx.message.refundReceiver, stack.chainId, account) }</dd>
-					<dt>Data</dt><dd><TransactionDataDetails data = { transaction.safeTx.message.data } destination = { transaction.safeTx.message.to } transactionValue = { transaction.safeTx.message.value } chainId = { stack.chainId } connectedAccount = { account }/></dd>
+					<dt>Data</dt><dd><TransactionDataDetails data = { transaction.safeTx.message.data } destination = { transaction.safeTx.message.to } transactionValue = { transaction.safeTx.message.value } chainId = { stack.chainId } connectedAccount = { account } walletRequestTimeoutMs = { walletRequestTimeoutMs }/></dd>
 					<dt>Gnosis Safe tx hash</dt><dd class = 'address'>{ `0x${ transaction.safeTxHash.toString(16).padStart(64, '0') }` }</dd>
 					<dt>Signed owners</dt><dd>{ transaction.signatures.length === 0 ? 'None' : transaction.signatures.map(({ signer }) => identifiedAddress(signer, stack.chainId, account)).join(', ') }</dd>
 				</dl>

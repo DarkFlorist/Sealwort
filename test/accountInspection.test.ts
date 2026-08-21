@@ -5,7 +5,8 @@ import { getStackAccountCompatibility, inspectConnectedAccount } from '../src/ap
 import { TOKEN_METADATA_ABI } from '../src/app/abis/tokenMetadata.js'
 import { addressString, bytesToHex, encodeSafeReadCall } from '../src/app/ethereum.js'
 import type { InjectedProvider, VerifiedSafeState } from '../src/app/safeStackValidation.js'
-import { formatTokenBalance, getPreferredNativeAssetBalance, readConnectedSafeBalances } from '../src/app/accountBalances.js'
+import { getPreferredNativeAssetBalance, readConnectedSafeBalances } from '../src/app/accountBalances.js'
+import { formatTokenBalance } from '../src/app/assetFormatting.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
 const safeAddress = 0x1234n

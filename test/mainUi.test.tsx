@@ -8,7 +8,8 @@ import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
-import { CONTRACTS, createContract, ERC20, UNISWAP_V2_ROUTER_CONTRACT, UNISWAP_V3_ROUTER_CONTRACT, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { CONTRACTS, createContract, ERC20, ERC721, UNISWAP_V2_ROUTER_CONTRACT, UNISWAP_V3_ROUTER_CONTRACT, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { dataStringWith0xStart } from '../src/app/ethereum.js'
 
@@ -62,6 +63,7 @@ function renderStack(overrides: Partial<Parameters<typeof SafeStackPanel>[0]> = 
 		busy: false,
 		submittedExecutions: [],
 		transactionActionErrors: [],
+		walletRequestTimeoutMs: undefined,
 		onSign: (transactionIndex, execute) => { onSignCalls.push({ transactionIndex, execute }) },
 		onExecute: (transactionIndex) => { onExecuteCalls.push(transactionIndex) },
 		...overrides,
@@ -201,6 +203,73 @@ describe('Sealwort rendered UI', () => {
 		try {
 			renderStack({ stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, data } } }] } })
 			assert.notEqual(await screen.findByText('Token metadata provider failed unexpectedly.'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('times out a token metadata request that never settles', async () => {
+		const data = createContract(ERC20).transfer.encodeInput({ to: '0x0000000000000000000000000000000000005678', value: 1_500_000n })
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0xaa36a7'
+			return await new Promise<never>(() => undefined)
+		} }
+		try {
+			renderStack({
+				walletRequestTimeoutMs: 5,
+				stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, data } } }] },
+			})
+			assert.notEqual(await screen.findByText('The wallet did not respond to eth_call. Reconnect the wallet and try again.'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('uses destination ERC-165 support to render the shared selector as an ERC-721 transfer', async () => {
+		const erc721 = createContract(ERC721) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const data = erc721['safeTransferFrom(address,address,uint256)']!.encodeInput({
+			from: '0x0000000000000000000000000000000000001111',
+			to: '0x0000000000000000000000000000000000002222',
+			tokenId: 42n,
+		})
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method }) => method === 'eth_chainId' ? '0xaa36a7' : `0x${ '0'.repeat(63) }1` }
+		try {
+			renderStack({ stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0x9999n, data } } }] } })
+			assert.notEqual(await screen.findByText('Token ID'), undefined)
+			assert.equal(screen.getByText('42').previousElementSibling?.textContent, 'Token ID')
+			assert.notEqual(screen.getByText('Sender'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('renders the shared selector as the token helper when the destination is not ERC-721', async () => {
+		const token = '0x0000000000000000000000000000000000001111'
+		const data = createContract(CUSTOM_PAYMENT_ABI).safeTransferFrom.encodeInput({ _tokenAddress: token, _to: '0x0000000000000000000000000000000000002222', _amount: 1_500_000n })
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		let contractCalls = 0
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0xaa36a7'
+			contractCalls += 1
+			if (contractCalls === 1) throw new Error('execution reverted')
+			return `0x${ '0'.repeat(63) }6`
+		} }
+		try {
+			renderStack({ stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0x9999n, data } } }] } })
+			assert.notEqual(await screen.findByText('1.5 tokens'), undefined)
+			assert.equal(screen.getByText('1.5 tokens').previousElementSibling?.textContent, 'Amount')
+			assert.notEqual(screen.getByText('Token'), undefined)
 		} finally {
 			if (previousEthereum === undefined) delete window.ethereum
 			else window.ethereum = previousEthereum

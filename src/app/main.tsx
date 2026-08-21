@@ -494,6 +494,7 @@ export function App({
 					busy = { busy }
 					submittedExecutions = { submittedExecutions.value }
 					transactionActionErrors = { transactionActionErrors.value }
+					walletRequestTimeoutMs = { walletRequestTimeoutMs }
 					onSign = { (transactionIndex, executeAfterSigning) => { void signTransaction(stackIndex, transactionIndex, executeAfterSigning) } }
 					onExecute = { (transactionIndex) => { void executeTransaction(stackIndex, transactionIndex) } }
 				/>) }
