@@ -9,6 +9,7 @@ import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction }
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { PERSISTED_SAFE_STACK_STORAGE_KEY, SAFE_STACK_PERSISTENCE_WARNING } from '../src/app/uiState.js'
 import { getWalletRequestTimeoutMessage } from '../src/app/walletProvider.js'
+import { DEFAULT_ETHEREUM_RPC_URL, PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY } from '../src/app/rpcSettings.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
 const ownerPrivateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
@@ -194,6 +195,32 @@ afterEach(() => {
 })
 
 describe('Sealwort app wallet workflows', () => {
+	test('persists a custom Ethereum RPC from the top-right settings control', () => {
+		render(<App />)
+
+		fireEvent.click(screen.getByText('RPC settings'))
+		const rpcUrlInput = screen.getByLabelText('Ethereum RPC URL') as HTMLInputElement
+		assert.equal(rpcUrlInput.value, DEFAULT_ETHEREUM_RPC_URL)
+		fireEvent.input(rpcUrlInput, { target: { value: 'https://rpc.example.test/v1/key' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+		assert.equal(window.localStorage.getItem(PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY), 'https://rpc.example.test/v1/key')
+		assert.notEqual(screen.getByText('RPC endpoint saved.'), undefined)
+	})
+
+	test('rejects a non-HTTPS custom Ethereum RPC', () => {
+		render(<App />)
+
+		fireEvent.click(screen.getByText('RPC settings'))
+		const rpcUrlInput = screen.getByLabelText('Ethereum RPC URL')
+		fireEvent.input(rpcUrlInput, { target: { value: 'http://rpc.example.test' } })
+		fireEvent.submit(screen.getByRole('button', { name: 'Save' }).closest('form') as HTMLFormElement)
+
+		assert.notEqual(screen.getByRole('alert').textContent, undefined)
+		assert.equal(screen.getByRole('alert').textContent, 'The Ethereum RPC URL must use HTTPS.')
+		assert.equal(window.localStorage.getItem(PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY), null)
+	})
+
 	test('refreshes the rendered connected account when the provider advertises an account change', async () => {
 		const harness = createProviderHarness()
 		window.ethereum = harness.provider

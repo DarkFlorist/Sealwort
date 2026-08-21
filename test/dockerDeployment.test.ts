@@ -96,7 +96,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 		Bun.file(new URL('../src/_headers', import.meta.url)).text(),
 	])
 	for (const securityPolicy of [indexHtml, responseHeaders]) {
-		assert.match(securityPolicy, /connect-src https:\/\/ethereum\.dark\.florist/u)
+		assert.match(securityPolicy, /connect-src https:;/u)
 		assert.doesNotMatch(securityPolicy, /connect-src[^;]*'self'/u)
 	}
 })

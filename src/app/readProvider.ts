@@ -1,9 +1,8 @@
 import * as funtypes from 'funtypes'
 import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js'
+import { DEFAULT_ETHEREUM_RPC_URL, getEthereumRpcSourceLabel } from './rpcSettings.js'
 
-export const DARK_FLORIST_ETHEREUM_RPC_URL = 'https://ethereum.dark.florist'
-
-export type SafeInformationSource = 'Injected wallet' | 'ethereum.dark.florist'
+export type SafeInformationSource = string
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
@@ -73,14 +72,15 @@ export async function getSafeReadProvider(
 	chainId: bigint,
 	injectedProvider: InjectedProvider | undefined,
 	fetchImplementation: FetchImplementation = globalThis.fetch,
+	ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL,
 ): Promise<SafeReadProvider> {
 	if (injectedProvider !== undefined && await injectedProviderMatchesChain(injectedProvider, chainId)) {
 		return { provider: injectedProvider, source: 'Injected wallet' }
 	}
 	if (chainId === 1n) {
 		return {
-			provider: createJsonRpcProvider(DARK_FLORIST_ETHEREUM_RPC_URL, fetchImplementation),
-			source: 'ethereum.dark.florist',
+			provider: createJsonRpcProvider(ethereumRpcUrl, fetchImplementation),
+			source: getEthereumRpcSourceLabel(ethereumRpcUrl),
 		}
 	}
 	if (injectedProvider === undefined) {

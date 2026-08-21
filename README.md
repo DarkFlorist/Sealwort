@@ -23,10 +23,12 @@ their signature threshold.
 ![Sealwort displaying a newly signed Gnosis Safe stack](docs/sealwort-signed.png)
 
 Sealwort reads current Safe information through the injected wallet when it is on
-the stack's chain. For Ethereum mainnet stacks, it falls back to
-`https://ethereum.dark.florist` when no matching injected provider is available.
-Using the fallback discloses the imported Safe address to that RPC. Signing always
-requires an injected owner wallet and never uses the fallback RPC.
+the stack's chain. For Ethereum mainnet stacks, it falls back to the HTTPS endpoint
+selected in RPC settings when no matching injected provider is available. The
+default is `https://ethereum.dark.florist`, and a custom choice is preserved in
+local browser storage. Using the fallback discloses the imported Safe address to
+that RPC. Signing always requires an injected owner wallet and never uses the
+fallback RPC.
 
 Sealwort preserves the pasted stack in local browser storage, so refreshing the
 page does not discard an in-progress signing session. The Refresh action reloads
@@ -80,6 +82,9 @@ These checks are repeated immediately before the wallet request.
   delegatecalls, duplicate signatures, and altered transaction lists.
 - Includes framing protection through both response headers and a fail-closed
   top-level runtime check.
+- Accepts only HTTPS custom RPC endpoints without embedded credentials or URL
+  fragments. The CSP permits HTTPS connections so a static deployment can reach
+  the endpoint selected by the user at runtime.
 
 ## Development
 
