@@ -12,6 +12,7 @@ export function validateEthereumRpcUrl(value: string) {
 		throw new Error('Enter a valid Ethereum RPC URL.')
 	}
 	if (parsed.protocol !== 'https:') throw new Error('The Ethereum RPC URL must use HTTPS.')
+	if (parsed.host.length === 0) throw new Error('The Ethereum RPC URL must include a host.')
 	if (parsed.username.length !== 0 || parsed.password.length !== 0) {
 		throw new Error('The Ethereum RPC URL must not contain embedded credentials.')
 	}
@@ -19,7 +20,7 @@ export function validateEthereumRpcUrl(value: string) {
 	return trimmedValue
 }
 
-export function getEthereumRpcSourceLabel(rpcUrl: string) {
+export function getEthereumRpcHost(rpcUrl: string) {
 	return new URL(rpcUrl).host
 }
 

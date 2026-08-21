@@ -6,12 +6,13 @@ import { checksummedAddress, dataStringWith0xStart } from '../ethereum.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'
+import { getSafeInformationSourceLabel, type SafeInformationSource } from '../readProvider.js'
 import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason, getVisibleExecutionFundingReason } from '../uiState.js'
 import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilities.js'
 
-function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState, readonly source: string | undefined }) {
+function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState, readonly source: SafeInformationSource | undefined }) {
 	return <dl class = 'details safe-details'>
-		{ source === undefined ? <></> : <><dt>Source</dt><dd>{ source }</dd></> }
+		{ source === undefined ? <></> : <><dt>Source</dt><dd>{ getSafeInformationSourceLabel(source) }</dd></> }
 		<dt>Version</dt><dd>{ state.version }</dd>
 		<dt>Nonce</dt><dd>{ state.nonce.toString() }</dd>
 		<dt>Threshold</dt><dd>{ state.threshold.toString() }/{ state.owners.length.toString() }</dd>
@@ -105,7 +106,7 @@ export function SafeStackPanel({
 			{ currentSafeInformation === undefined || currentSafeInformation.loading
 				? <p class = 'muted' role = 'status'><LoadingIndicator>Retrieving current Gnosis Safe information…</LoadingIndicator></p>
 				: currentSafeInformation.state === undefined
-					? <>{ currentSafeInformation.source === undefined ? <></> : <p class = 'meta'>Source: { currentSafeInformation.source }</p> }<p class = 'safe-information-error'>{ currentSafeInformation.error ?? 'Current Gnosis Safe information is unavailable.' }</p></>
+					? <>{ currentSafeInformation.source === undefined ? <></> : <p class = 'meta'>Source: { getSafeInformationSourceLabel(currentSafeInformation.source) }</p> }<p class = 'safe-information-error'>{ currentSafeInformation.error ?? 'Current Gnosis Safe information is unavailable.' }</p></>
 					: <SafeStateDetails state = { currentSafeInformation.state } source = { currentSafeInformation.source }/> }
 		</section>
 		{ stackAccountCompatibility?.status === 'mismatch' ? <p class = 'account-compatibility mismatch' role = 'alert'>{ stackAccountCompatibility.message }</p> : <></> }

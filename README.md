@@ -84,7 +84,9 @@ These checks are repeated immediately before the wallet request.
   top-level runtime check.
 - Accepts only HTTPS custom RPC endpoints without embedded credentials or URL
   fragments. The CSP permits HTTPS connections so a static deployment can reach
-  the endpoint selected by the user at runtime.
+  the endpoint selected by the user at runtime. A response or meta CSP cannot be
+  expanded after delivery, so a static build cannot add only a browser-stored
+  custom host to the original single-origin allowlist.
 
 ## Development
 

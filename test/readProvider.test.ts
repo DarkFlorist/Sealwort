@@ -27,7 +27,7 @@ describe('Safe information read provider', () => {
 		})
 
 		assert.equal(selected.provider, injectedProvider)
-		assert.equal(selected.source, 'Injected wallet')
+		assert.deepEqual(selected.source, { kind: 'injected' })
 		assert.equal(fallbackRequested, false)
 	})
 
@@ -41,7 +41,7 @@ describe('Safe information read provider', () => {
 			return jsonResponse({ jsonrpc: '2.0', id: 1, result: '0x1' })
 		})
 
-		assert.equal(selected.source, 'ethereum.dark.florist')
+		assert.deepEqual(selected.source, { kind: 'rpc', host: 'ethereum.dark.florist' })
 		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
 		assert.equal(requests[0]?.url, DEFAULT_ETHEREUM_RPC_URL)
 		assert.deepEqual(requests[0]?.body, {
@@ -65,7 +65,7 @@ describe('Safe information read provider', () => {
 			result: '0x1',
 		}))
 
-		assert.equal(selected.source, 'ethereum.dark.florist')
+		assert.deepEqual(selected.source, { kind: 'rpc', host: 'ethereum.dark.florist' })
 		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
 	})
 
@@ -76,7 +76,7 @@ describe('Safe information read provider', () => {
 			return jsonResponse({ jsonrpc: '2.0', id: 1, result: '0x1' })
 		}, 'https://rpc.example.test/private-api-key')
 
-		assert.equal(selected.source, 'rpc.example.test')
+		assert.deepEqual(selected.source, { kind: 'rpc', host: 'rpc.example.test' })
 		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
 		assert.deepEqual(requests, ['https://rpc.example.test/private-api-key'])
 	})

@@ -1,9 +1,15 @@
 import * as funtypes from 'funtypes'
 import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js'
-import { DEFAULT_ETHEREUM_RPC_URL, getEthereumRpcSourceLabel } from './rpcSettings.js'
+import { DEFAULT_ETHEREUM_RPC_URL, getEthereumRpcHost } from './rpcSettings.js'
 
-export type SafeInformationSource = string
+export type SafeInformationSource =
+	| { readonly kind: 'injected' }
+	| { readonly kind: 'rpc', readonly host: string }
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
+export function getSafeInformationSourceLabel(source: SafeInformationSource) {
+	return source.kind === 'injected' ? 'Injected wallet' : source.host
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -75,12 +81,12 @@ export async function getSafeReadProvider(
 	ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL,
 ): Promise<SafeReadProvider> {
 	if (injectedProvider !== undefined && await injectedProviderMatchesChain(injectedProvider, chainId)) {
-		return { provider: injectedProvider, source: 'Injected wallet' }
+		return { provider: injectedProvider, source: { kind: 'injected' } }
 	}
 	if (chainId === 1n) {
 		return {
 			provider: createJsonRpcProvider(ethereumRpcUrl, fetchImplementation),
-			source: getEthereumRpcSourceLabel(ethereumRpcUrl),
+			source: { kind: 'rpc', host: getEthereumRpcHost(ethereumRpcUrl) },
 		}
 	}
 	if (injectedProvider === undefined) {
