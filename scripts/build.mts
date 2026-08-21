@@ -24,7 +24,7 @@ const result = await Bun.build({
 	target: 'browser',
 	format: 'esm',
 	minify: true,
-	sourcemap: 'linked',
+	sourcemap: 'none',
 	naming: 'main.js',
 	define: {
 		SEALWORT_BUILD_RELEASE: JSON.stringify(release ?? ''),

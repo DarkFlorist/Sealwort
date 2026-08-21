@@ -12,6 +12,7 @@ import { withWalletRequestTimeout } from './walletProvider.js'
 export function useSafeInformation(
 	stackRevision: Signal<number>,
 	stackExport: Signal<SafeStackExport | undefined>,
+	ethereumRpcUrl: Signal<string>,
 	walletRequestTimeoutMs?: number,
 ) {
 	const information = useSignal<readonly SafeInformation[]>([])
@@ -37,7 +38,7 @@ export function useSafeInformation(
 				const injectedProvider = window.ethereum === undefined
 					? undefined
 					: withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
-				const safeReadProvider = await getSafeReadProvider(stack.chainId, injectedProvider)
+				const safeReadProvider = await getSafeReadProvider(stack.chainId, injectedProvider, globalThis.fetch, ethereumRpcUrl.peek())
 				updateInformation(stackIndex, (current) => ({ ...current, source: safeReadProvider.source }))
 				void readNativeAssetBalance(safeReadProvider.provider, stack.safeAddress, stack.chainId).then((nativeAsset) => {
 					updateInformation(stackIndex, (current) => ({ ...current, nativeAssetLoading: false, nativeAsset }))

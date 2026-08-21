@@ -1,6 +1,7 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
-import { createJsonRpcProvider, DARK_FLORIST_ETHEREUM_RPC_URL, getSafeReadProvider } from '../src/app/readProvider.js'
+import { createJsonRpcProvider, getSafeReadProvider } from '../src/app/readProvider.js'
+import { DEFAULT_ETHEREUM_RPC_URL } from '../src/app/rpcSettings.js'
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 
 function jsonResponse(value: unknown, status = 200) {
@@ -26,7 +27,7 @@ describe('Safe information read provider', () => {
 		})
 
 		assert.equal(selected.provider, injectedProvider)
-		assert.equal(selected.source, 'Injected wallet')
+		assert.deepEqual(selected.source, { kind: 'injected' })
 		assert.equal(fallbackRequested, false)
 	})
 
@@ -40,9 +41,9 @@ describe('Safe information read provider', () => {
 			return jsonResponse({ jsonrpc: '2.0', id: 1, result: '0x1' })
 		})
 
-		assert.equal(selected.source, 'ethereum.dark.florist')
+		assert.deepEqual(selected.source, { kind: 'rpc', host: 'ethereum.dark.florist' })
 		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
-		assert.equal(requests[0]?.url, DARK_FLORIST_ETHEREUM_RPC_URL)
+		assert.equal(requests[0]?.url, DEFAULT_ETHEREUM_RPC_URL)
 		assert.deepEqual(requests[0]?.body, {
 			jsonrpc: '2.0',
 			id: 1,
@@ -64,26 +65,38 @@ describe('Safe information read provider', () => {
 			result: '0x1',
 		}))
 
-		assert.equal(selected.source, 'ethereum.dark.florist')
+		assert.deepEqual(selected.source, { kind: 'rpc', host: 'ethereum.dark.florist' })
 		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
 	})
 
+	test('uses the configured mainnet RPC without exposing its path in the source label', async () => {
+		const requests: string[] = []
+		const selected = await getSafeReadProvider(1n, undefined, async (input) => {
+			requests.push(String(input))
+			return jsonResponse({ jsonrpc: '2.0', id: 1, result: '0x1' })
+		}, 'https://rpc.example.test/private-api-key')
+
+		assert.deepEqual(selected.source, { kind: 'rpc', host: 'rpc.example.test' })
+		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
+		assert.deepEqual(requests, ['https://rpc.example.test/private-api-key'])
+	})
+
 	test('reports JSON-RPC and transport failures clearly', async () => {
-		const rejectedProvider = createJsonRpcProvider(DARK_FLORIST_ETHEREUM_RPC_URL, async () => jsonResponse({
+		const rejectedProvider = createJsonRpcProvider(DEFAULT_ETHEREUM_RPC_URL, async () => jsonResponse({
 			jsonrpc: '2.0',
 			id: 1,
 			error: { code: -32000, message: 'upstream unavailable' },
 		}))
 		await assert.rejects(rejectedProvider.request({ method: 'eth_chainId' }), /upstream unavailable/u)
 
-		const malformedErrorProvider = createJsonRpcProvider(DARK_FLORIST_ETHEREUM_RPC_URL, async () => jsonResponse({
+		const malformedErrorProvider = createJsonRpcProvider(DEFAULT_ETHEREUM_RPC_URL, async () => jsonResponse({
 			jsonrpc: '2.0',
 			id: 1,
 			error: null,
 		}))
 		await assert.rejects(malformedErrorProvider.request({ method: 'eth_chainId' }), /Ethereum RPC rejected the request/u)
 
-		const unavailableProvider = createJsonRpcProvider(DARK_FLORIST_ETHEREUM_RPC_URL, async () => {
+		const unavailableProvider = createJsonRpcProvider(DEFAULT_ETHEREUM_RPC_URL, async () => {
 			throw new Error('network failure')
 		})
 		await assert.rejects(unavailableProvider.request({ method: 'eth_chainId' }), /Could not reach the Ethereum RPC/u)
@@ -91,7 +104,7 @@ describe('Safe information read provider', () => {
 
 	test('matches concurrent responses to the request that created each ID', async () => {
 		const pendingResponses = new Map<number, (response: Response) => void>()
-		const provider = createJsonRpcProvider(DARK_FLORIST_ETHEREUM_RPC_URL, async (_input, init) => {
+		const provider = createJsonRpcProvider(DEFAULT_ETHEREUM_RPC_URL, async (_input, init) => {
 			const body: unknown = JSON.parse(String(init?.body))
 			if (typeof body !== 'object' || body === null || !('id' in body)) {
 				throw new Error('Missing request ID')

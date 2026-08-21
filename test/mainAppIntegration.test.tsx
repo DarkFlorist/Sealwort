@@ -11,6 +11,7 @@ import { SAFE_STACK_FORMAT_VERSION, SafeStackExport, type SafeStackTransaction }
 import type { InjectedProvider } from '../src/app/safeStackValidation.js'
 import { PERSISTED_SAFE_STACK_STORAGE_KEY, SAFE_STACK_PERSISTENCE_WARNING } from '../src/app/uiState.js'
 import { getWalletRequestTimeoutMessage } from '../src/app/walletProvider.js'
+import { DEFAULT_ETHEREUM_RPC_URL, PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY } from '../src/app/rpcSettings.js'
 import { identifiedAddress } from '../src/app/addressLabels.js'
 import { SAFE_1_4_1_PROXY_RUNTIME, SAFE_1_4_1_SINGLETON_RUNTIME, SAFE_1_4_1_SINGLETON_STORAGE } from './safeDeploymentFixtures.js'
 
@@ -198,6 +199,32 @@ afterEach(() => {
 })
 
 describe('Sealwort app wallet workflows', () => {
+	test('persists a custom Ethereum RPC from the top-right settings control', () => {
+		render(<App />)
+
+		fireEvent.click(screen.getByText('RPC settings'))
+		const rpcUrlInput = screen.getByLabelText('Ethereum Mainnet RPC URL') as HTMLInputElement
+		assert.equal(rpcUrlInput.value, DEFAULT_ETHEREUM_RPC_URL)
+		assert.notEqual(screen.getByText('Used only when wallet is not connected'), undefined)
+		fireEvent.input(rpcUrlInput, { target: { value: 'https://rpc.example.test/v1/key' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+		assert.equal(window.localStorage.getItem(PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY), 'https://rpc.example.test/v1/key')
+		assert.notEqual(screen.getByText('RPC endpoint saved.'), undefined)
+	})
+
+	test('persists an HTTP Ethereum RPC', () => {
+		render(<App />)
+
+		fireEvent.click(screen.getByText('RPC settings'))
+		const rpcUrlInput = screen.getByLabelText('Ethereum Mainnet RPC URL')
+		fireEvent.input(rpcUrlInput, { target: { value: 'http://rpc.example.test' } })
+		fireEvent.submit(screen.getByRole('button', { name: 'Save' }).closest('form') as HTMLFormElement)
+
+		assert.equal(window.localStorage.getItem(PERSISTED_ETHEREUM_RPC_URL_STORAGE_KEY), 'http://rpc.example.test')
+		assert.notEqual(screen.getByText('RPC endpoint saved.'), undefined)
+	})
+
 	test('refreshes the rendered connected account when the provider advertises an account change', async () => {
 		const harness = createProviderHarness()
 		window.ethereum = harness.provider

@@ -19,6 +19,8 @@ import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
+import { RpcSettings } from './components/RpcSettings.js'
+import { persistEthereumRpcUrl, readPersistedEthereumRpcUrl, validateEthereumRpcUrl } from './rpcSettings.js'
 import { useTransactionDataMetadata } from './useTransactionDataMetadata.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -71,13 +73,14 @@ export function App({
 	const persistenceWarning = useSignal<string | undefined>(undefined)
 	const pendingAction = useSignal<PendingAction | undefined>(undefined)
 	const importText = useSignal(readPersistedSafeStackText(browserStorage))
+	const ethereumRpcUrl = useSignal(readPersistedEthereumRpcUrl(browserStorage))
 	const lastImportedText = useSignal<string | undefined>(undefined)
 	const stackInputExpanded = useSignal(false)
 	const updatedStackExpanded = useSignal(false)
 	const importTextarea = useRef<HTMLTextAreaElement>(null)
 	const updatedStackTextarea = useRef<HTMLTextAreaElement>(null)
 	const stackRevision = useSignal(0)
-	const { information: safeInformation, refresh: refreshSafeInformation } = useSafeInformation(stackRevision, stackExport, walletRequestTimeoutMs)
+	const { information: safeInformation, refresh: refreshSafeInformation } = useSafeInformation(stackRevision, stackExport, ethereumRpcUrl, walletRequestTimeoutMs)
 	const signedStackJson = useSignal<string | undefined>(undefined)
 	const submittedExecutions = useSignal<readonly SubmittedExecution[]>([])
 	const transactionActionErrors = useSignal<readonly TransactionActionError[]>([])
@@ -403,6 +406,14 @@ export function App({
 		verifiedSafeStates.value,
 		walletRequestTimeoutMs,
 	)
+	const saveEthereumRpcUrl = (value: string) => {
+		const validatedUrl = validateEthereumRpcUrl(value)
+		ethereumRpcUrl.value = validatedUrl
+		const persisted = persistEthereumRpcUrl(browserStorage, validatedUrl)
+		const loadedStack = stackExport.peek()
+		if (loadedStack !== undefined) void refreshSafeInformation(loadedStack, stackRevision.peek())
+		return persisted
+	}
 	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, walletRequestTimeoutMs)
 
 	return <main class = 'shell' aria-busy = { busy || loadingApplicationData }>
@@ -416,22 +427,25 @@ export function App({
 					<p class = 'lede'>Review, independently verify, and sign Interceptor Gnosis Safe transactions</p>
 				</div>
 			</div>
-			<WalletSummary
-				loading = { walletSummaryLoading }
-				loadingLabel = { walletLoadingLabel }
-				busy = { busy }
-				applicationLoading = { loadingApplicationData }
-				account = { account.value }
-				chainId = { walletChainId.value }
-				accountInformation = { accountInformation.value }
-				activeSigner = { connectedSafeWalletSigner }
-				activeSignerLoading = { connectedSafeWalletSignerLoading.value }
-				balances = { currentConnectedSafeBalances }
-				balancesLoading = { connectedSafeBalancesLoading.value }
-				nativeAsset = { currentWalletNativeAsset }
-				onConnect = { () => { void connect() } }
-				onRefresh = { () => { void refresh() } }
-			/>
+			<div class = 'hero-controls'>
+				<RpcSettings rpcUrl = { ethereumRpcUrl.value } disabled = { busy } onSave = { saveEthereumRpcUrl } />
+				<WalletSummary
+					loading = { walletSummaryLoading }
+					loadingLabel = { walletLoadingLabel }
+					busy = { busy }
+					applicationLoading = { loadingApplicationData }
+					account = { account.value }
+					chainId = { walletChainId.value }
+					accountInformation = { accountInformation.value }
+					activeSigner = { connectedSafeWalletSigner }
+					activeSignerLoading = { connectedSafeWalletSignerLoading.value }
+					balances = { currentConnectedSafeBalances }
+					balancesLoading = { connectedSafeBalancesLoading.value }
+					nativeAsset = { currentWalletNativeAsset }
+					onConnect = { () => { void connect() } }
+					onRefresh = { () => { void refresh() } }
+				/>
+			</div>
 		</header>
 
 		{ loadingApplicationData

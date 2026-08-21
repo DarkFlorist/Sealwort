@@ -12,6 +12,10 @@ import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilit
 import { TransactionDataDetails } from './TransactionDataDetails.js'
 import type { TransactionDataMetadataResult } from '../useTransactionDataMetadata.js'
 
+function getSafeInformationSourceLabel(source: NonNullable<SafeInformation['source']>) {
+	return source.kind === 'injected' ? 'Injected wallet' : source.host
+}
+
 const ZERO_ADDRESS = 0n
 
 function operationLabel(operation: bigint) {
@@ -20,9 +24,9 @@ function operationLabel(operation: bigint) {
 	return `Unknown (${ operation.toString() })`
 }
 
-function SafeStateDetails({ state, source, chainId, connectedAccount }: { readonly state: VerifiedSafeState, readonly source: string | undefined, readonly chainId: bigint, readonly connectedAccount: bigint | undefined }) {
+function SafeStateDetails({ state, source, chainId, connectedAccount }: { readonly state: VerifiedSafeState, readonly source: SafeInformation['source'], readonly chainId: bigint, readonly connectedAccount: bigint | undefined }) {
 	return <dl class = 'details safe-details'>
-		{ source === undefined ? <></> : <><dt>Source</dt><dd>{ source }</dd></> }
+		{ source === undefined ? <></> : <><dt>Source</dt><dd>{ getSafeInformationSourceLabel(source) }</dd></> }
 		<dt>Version</dt><dd>{ state.version }</dd>
 		<dt>Nonce</dt><dd>{ state.nonce.toString() }</dd>
 		<dt>Threshold</dt><dd>{ state.threshold.toString() }/{ state.owners.length.toString() }</dd>
@@ -118,7 +122,7 @@ export function SafeStackPanel({
 			{ currentSafeInformation === undefined || currentSafeInformation.loading
 				? <p class = 'muted' role = 'status'><LoadingIndicator>Retrieving current Gnosis Safe information…</LoadingIndicator></p>
 				: currentSafeInformation.state === undefined
-					? <>{ currentSafeInformation.source === undefined ? <></> : <p class = 'meta'>Source: { currentSafeInformation.source }</p> }<p class = 'safe-information-error'>{ currentSafeInformation.error ?? 'Current Gnosis Safe information is unavailable.' }</p></>
+					? <>{ currentSafeInformation.source === undefined ? <></> : <p class = 'meta'>Source: { getSafeInformationSourceLabel(currentSafeInformation.source) }</p> }<p class = 'safe-information-error'>{ currentSafeInformation.error ?? 'Current Gnosis Safe information is unavailable.' }</p></>
 					: <SafeStateDetails state = { currentSafeInformation.state } source = { currentSafeInformation.source } chainId = { stack.chainId } connectedAccount = { account }/> }
 		</section>
 		{ stackAccountCompatibility?.status === 'mismatch' ? <p class = 'account-compatibility mismatch' role = 'alert'>{ stackAccountCompatibility.message }</p> : <></> }
