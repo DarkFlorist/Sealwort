@@ -6,6 +6,7 @@ import type { ConnectedSafeWalletSigner } from './appTypes.js'
 import { EthereumAddress } from './safeStackProtocol.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
+import { isWalletRequestTimeoutError } from './walletProvider.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -14,6 +15,10 @@ type ConnectedSafeBalanceState = {
 	readonly chainId: bigint
 	readonly balances: ConnectedSafeBalances
 }
+
+type WalletLoadResult =
+	| { readonly status: 'connected', readonly account: bigint, readonly chainId: bigint }
+	| { readonly status: 'disconnected' }
 
 export function useWalletState() {
 	const account = useSignal<bigint | undefined>(undefined)
@@ -130,15 +135,22 @@ export function useWalletState() {
 		}
 	}
 
-	const load = async (provider: InjectedProvider, operationRevision: number, requestAccess: boolean) => {
+	const load = async (provider: InjectedProvider, operationRevision: number, requestAccess: boolean): Promise<WalletLoadResult | undefined> => {
 		try {
 			const accountsResult = await provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' })
 			const accounts = EthereumAccounts.parse(accountsResult)
 			if (!isCurrent(operationRevision)) return undefined
 			const selectedAccount = accounts[0]
 			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
-			if (selectedAccount === undefined) return { account: undefined, chainId: undefined }
-			const chainIdResult = await provider.request({ method: 'eth_chainId' })
+			if (selectedAccount === undefined) return { status: 'disconnected' }
+			let chainIdResult: unknown
+			try {
+				chainIdResult = await provider.request({ method: 'eth_chainId' })
+			} catch (chainIdError) {
+				if (!isWalletRequestTimeoutError(chainIdError, 'eth_chainId')) throw chainIdError
+				disconnect(operationRevision)
+				return { status: 'disconnected' }
+			}
 			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined
 			account.value = selectedAccount
@@ -147,7 +159,7 @@ export function useWalletState() {
 			void refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision)
 			await accountInformationPromise
 			if (!isCurrent(operationRevision)) return undefined
-			return { account: selectedAccount, chainId: selectedChainId }
+			return { status: 'connected', account: selectedAccount, chainId: selectedChainId }
 		} finally {
 			if (isCurrent(operationRevision)) loading.value = false
 		}
@@ -165,7 +177,6 @@ export function useWalletState() {
 		safeWalletSigners,
 		safeWalletSignerLoading,
 		beginLoad,
-		disconnect,
 		isCurrent,
 		load,
 		stopLoading,

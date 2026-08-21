@@ -17,7 +17,7 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { isWalletRequestTimeoutError, withWalletRequestTimeout } from './walletProvider.js'
+import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -59,7 +59,6 @@ export function App({
 		safeWalletSigners: connectedSafeWalletSigners,
 		safeWalletSignerLoading: connectedSafeWalletSignerLoading,
 		beginLoad: beginWalletLoad,
-		disconnect: disconnectWallet,
 		isCurrent: isCurrentWalletOperation,
 		load: loadWallet,
 		stopLoading: stopWalletLoading,
@@ -98,15 +97,6 @@ export function App({
 		if (pendingAction.peek() === action) pendingAction.value = undefined
 	}
 
-	const resolveWalletLoadError = (operationRevision: number, walletError: unknown) => {
-		if (isWalletRequestTimeoutError(walletError, 'eth_chainId')) {
-			disconnectWallet(operationRevision)
-			return undefined
-		}
-		stopWalletLoading(operationRevision)
-		return getUserFacingErrorMessage(walletError)
-	}
-
 	const verifyLoadedStack = async (provider: InjectedProvider, loadedStack: SafeStackExport) => {
 		return await validateSafeStackAtCurrentNonce(provider, loadedStack)
 	}
@@ -120,7 +110,7 @@ export function App({
 		if (walletIdentity === undefined) return
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
-		const verificationAction = getAutomaticStackVerificationAction(loadedStack !== undefined, walletIdentity.account)
+		const verificationAction = getAutomaticStackVerificationAction(loadedStack !== undefined, walletIdentity.status === 'connected' ? walletIdentity.account : undefined)
 		if (verificationAction === 'no-stack') return
 		if (verificationAction === 'await-account') {
 			verifiedSafeStates.value = []
@@ -168,7 +158,8 @@ export function App({
 				verifiedSafeStates.value = []
 				status.value = undefined
 			}
-			error.value = resolveWalletLoadError(walletRefreshRevision, providerError)
+			stopWalletLoading(walletRefreshRevision)
+			error.value = getUserFacingErrorMessage(providerError)
 		} finally {
 			if (provider === window.ethereum && isCurrentWalletOperation(walletRefreshRevision)) {
 				applicationLoading.value = false
@@ -221,7 +212,7 @@ export function App({
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
 			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
-			if (walletIdentity === undefined) return
+			if (walletIdentity === undefined || walletIdentity.status === 'disconnected') return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()
@@ -244,8 +235,9 @@ export function App({
 				stackVerified.value = false
 				verifiedSafeStates.value = []
 			}
+			stopWalletLoading(connectWalletRevision)
 			status.value = undefined
-			error.value = resolveWalletLoadError(connectWalletRevision, connectError)
+			error.value = getUserFacingErrorMessage(connectError)
 		} finally {
 			if (isCurrentStackOperation(stackRevision.peek(), verificationRevision, stackExport.peek(), loadedStackAtVerification)) stackVerificationLoading.value = false
 			if (isCurrentWalletOperation(connectWalletRevision)) finishPendingAction(action)
