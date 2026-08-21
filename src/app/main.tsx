@@ -17,7 +17,7 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { withWalletRequestTimeout } from './walletProvider.js'
+import { isWalletRequestTimeoutError, withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
@@ -59,6 +59,7 @@ export function App({
 		safeWalletSigners: connectedSafeWalletSigners,
 		safeWalletSignerLoading: connectedSafeWalletSignerLoading,
 		beginLoad: beginWalletLoad,
+		disconnect: disconnectWallet,
 		isCurrent: isCurrentWalletOperation,
 		load: loadWallet,
 		stopLoading: stopWalletLoading,
@@ -158,8 +159,13 @@ export function App({
 				verifiedSafeStates.value = []
 				status.value = undefined
 			}
-			stopWalletLoading(walletRefreshRevision)
-			error.value = getUserFacingErrorMessage(providerError)
+			if (isWalletRequestTimeoutError(providerError, 'eth_chainId')) {
+				disconnectWallet(walletRefreshRevision)
+				error.value = undefined
+			} else {
+				stopWalletLoading(walletRefreshRevision)
+				error.value = getUserFacingErrorMessage(providerError)
+			}
 		} finally {
 			if (provider === window.ethereum && isCurrentWalletOperation(walletRefreshRevision)) {
 				applicationLoading.value = false
@@ -235,9 +241,10 @@ export function App({
 				stackVerified.value = false
 				verifiedSafeStates.value = []
 			}
-			stopWalletLoading(connectWalletRevision)
+			if (isWalletRequestTimeoutError(connectError, 'eth_chainId')) disconnectWallet(connectWalletRevision)
+			else stopWalletLoading(connectWalletRevision)
 			status.value = undefined
-			error.value = getUserFacingErrorMessage(connectError)
+			error.value = isWalletRequestTimeoutError(connectError, 'eth_chainId') ? undefined : getUserFacingErrorMessage(connectError)
 		} finally {
 			if (isCurrentStackOperation(stackRevision.peek(), verificationRevision, stackExport.peek(), loadedStackAtVerification)) stackVerificationLoading.value = false
 			if (isCurrentWalletOperation(connectWalletRevision)) finishPendingAction(action)

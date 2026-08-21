@@ -89,12 +89,14 @@ function createProviderHarness(options: {
 	readonly walletCapabilitiesResult?: Promise<unknown>
 	readonly threshold?: bigint
 	readonly hangingMethod?: string
+	readonly hangingMethodRequestCount?: number
 	readonly executionReceiptResult?: Promise<unknown> | unknown
 } = {}): ProviderHarness {
 	let accounts = [...(options.accounts ?? [addr.addChecksum(`0x${ ownerAddress.toString(16).padStart(40, '0') }`)])]
 	let signatureRequests = 0
 	let executionRequests = 0
 	let failNextWalletIdentityRequest = false
+	let hangingMethodRequestsRemaining = options.hangingMethodRequestCount ?? Number.POSITIVE_INFINITY
 	const requestedMethods: string[] = []
 	const accountListeners = new Set<(value: unknown) => void>()
 	const selectors = {
@@ -113,7 +115,10 @@ function createProviderHarness(options: {
 		},
 		async request(request) {
 			requestedMethods.push(request.method)
-			if (request.method === options.hangingMethod) return await new Promise<never>(() => undefined)
+			if (request.method === options.hangingMethod && hangingMethodRequestsRemaining > 0) {
+				hangingMethodRequestsRemaining -= 1
+				return await new Promise<never>(() => undefined)
+			}
 			switch (request.method) {
 				case 'eth_accounts':
 					if (failNextWalletIdentityRequest) {
@@ -219,6 +224,34 @@ describe('Sealwort app wallet workflows', () => {
 		assert.equal(previousAccount.isConnected, false)
 		assert.equal(screen.queryByText(checksummedAddress(ownerAddress)), null)
 		assert.notEqual(screen.getByRole('button', { name: 'Connect signer wallet' }), undefined)
+	})
+
+	test('does not request a chain ID until a wallet account is available', async () => {
+		const harness = createProviderHarness({ accounts: [] })
+		window.ethereum = harness.provider
+		render(<App />)
+
+		await screen.findByRole('button', { name: 'Connect signer wallet' })
+		assert.equal(harness.requestedMethods.includes('eth_accounts'), true)
+		assert.equal(harness.requestedMethods.includes('eth_chainId'), false)
+	})
+
+	test('stays disconnected without an error when chain discovery times out and retries on connect', async () => {
+		const harness = createProviderHarness({
+			hangingMethod: 'eth_chainId',
+			hangingMethodRequestCount: 1,
+		})
+		window.ethereum = harness.provider
+		render(<App walletRequestTimeoutMs = { 5 } />)
+
+		const connectButton = await screen.findByRole('button', { name: 'Connect signer wallet' })
+		assert.equal(screen.queryByText(getWalletRequestTimeoutMessage('eth_chainId')), null)
+		assert.equal(screen.queryByRole('alert'), null)
+		assert.equal(harness.requestedMethods.filter((method) => method === 'eth_chainId').length, 1)
+
+		fireEvent.click(connectButton)
+		await screen.findByText(checksummedAddress(ownerAddress))
+		assert.equal(harness.requestedMethods.filter((method) => method === 'eth_chainId').length, 2)
 	})
 
 	test('stops loading and identifies the RPC method when Safe account inspection times out', async () => {

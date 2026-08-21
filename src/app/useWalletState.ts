@@ -54,6 +54,16 @@ export function useWalletState() {
 		safeWalletSignerLoading.value = false
 	}
 
+	const disconnect = (operationRevision: number) => {
+		if (!isCurrent(operationRevision)) return
+		account.value = undefined
+		chainId.value = undefined
+		information.value = undefined
+		balances.value = undefined
+		safeWalletSigners.value = []
+		stopLoading(operationRevision)
+	}
+
 	const refreshAccountInformation = async (
 		provider: InjectedProvider,
 		selectedAccount: bigint | undefined,
@@ -122,17 +132,17 @@ export function useWalletState() {
 
 	const load = async (provider: InjectedProvider, operationRevision: number, requestAccess: boolean) => {
 		try {
-			const [accountsResult, chainIdResult] = await Promise.all([
-				provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' }),
-				provider.request({ method: 'eth_chainId' }),
-			])
+			const accountsResult = await provider.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' })
 			const accounts = EthereumAccounts.parse(accountsResult)
-			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
 			if (!isCurrent(operationRevision)) return undefined
 			const selectedAccount = accounts[0]
+			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
+			if (selectedAccount === undefined) return { account: undefined, chainId: undefined }
+			const chainIdResult = await provider.request({ method: 'eth_chainId' })
+			const selectedChainId = BigInt(funtypes.String.parse(chainIdResult))
+			if (!isCurrent(operationRevision)) return undefined
 			account.value = selectedAccount
 			chainId.value = selectedChainId
-			if (requestAccess && selectedAccount === undefined) throw new Error('The wallet did not provide an account.')
 			const accountInformationPromise = refreshAccountInformation(provider, selectedAccount, selectedChainId, operationRevision)
 			void refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision)
 			await accountInformationPromise
@@ -155,6 +165,7 @@ export function useWalletState() {
 		safeWalletSigners,
 		safeWalletSignerLoading,
 		beginLoad,
+		disconnect,
 		isCurrent,
 		load,
 		stopLoading,
