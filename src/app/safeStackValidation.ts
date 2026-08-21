@@ -12,8 +12,6 @@ import {
 	type SafeTransactionStack,
 } from './safeStackProtocol.js'
 
-export type { InjectedProvider, ProviderRequest } from './provider.js'
-
 export type VerifiedSafeState = {
 	readonly version: string
 	readonly nonce: bigint

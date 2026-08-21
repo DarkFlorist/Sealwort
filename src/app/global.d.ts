@@ -1,4 +1,4 @@
-import type { InjectedProvider } from './safeStackValidation.js'
+import type { InjectedProvider } from './provider.js'
 
 declare global {
 	interface Window {

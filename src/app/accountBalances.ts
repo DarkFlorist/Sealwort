@@ -1,6 +1,6 @@
 import * as funtypes from 'funtypes'
 import { addressString, decodeSafeUint, ensureHex, type Hex } from './ethereum.js'
-import type { InjectedProvider } from './safeStackValidation.js'
+import type { InjectedProvider } from './provider.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 
 const ETHEREUM_MAINNET_CHAIN_ID = 1n

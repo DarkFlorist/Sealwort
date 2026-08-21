@@ -1,5 +1,5 @@
 import * as funtypes from 'funtypes'
-import type { InjectedProvider, ProviderRequest } from './safeStackValidation.js'
+import type { InjectedProvider, ProviderRequest } from './provider.js'
 
 export const DARK_FLORIST_ETHEREUM_RPC_URL = 'https://ethereum.dark.florist'
 

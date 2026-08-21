@@ -1,7 +1,7 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { createJsonRpcProvider, DARK_FLORIST_ETHEREUM_RPC_URL, getSafeReadProvider } from '../src/app/readProvider.js'
-import type { InjectedProvider } from '../src/app/safeStackValidation.js'
+import type { InjectedProvider } from '../src/app/provider.js'
 
 function jsonResponse(value: unknown, status = 200) {
 	return new Response(JSON.stringify(value), {

@@ -2,7 +2,7 @@ import * as assert from 'assert'
 import { describe, test } from 'bun:test'
 import { getConnectedSafeWalletDuplicateSignerMessage, getConnectedSafeWalletSigner } from '../src/app/walletCapabilities.js'
 import { addressString } from '../src/app/ethereum.js'
-import type { InjectedProvider, ProviderRequest } from '../src/app/safeStackValidation.js'
+import type { InjectedProvider, ProviderRequest } from '../src/app/provider.js'
 
 const safeAddress = 0x1000000000000000000000000000000000000001n
 const activeSigner = 0x2000000000000000000000000000000000000002n
