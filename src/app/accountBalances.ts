@@ -1,8 +1,7 @@
 import * as funtypes from 'funtypes'
-import { createContract } from 'micro-eth-signer/advanced/abi.js'
-import { TOKEN_METADATA_ABI } from './abis/tokenMetadata.js'
 import { getNativeAssetSymbol } from './assetFormatting.js'
-import { addressString, bytesFromHex, bytesToHex, ensureHex } from './ethereum.js'
+import { readTokenBalance } from './contractMetadata.js'
+import { addressString } from './ethereum.js'
 import type { InjectedProvider } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 
@@ -10,7 +9,6 @@ const ETHEREUM_MAINNET_CHAIN_ID = 1n
 const ETHEREUM_SEPOLIA_CHAIN_ID = 11155111n
 const MAINNET_USDC_ADDRESS = 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n
 const SEPOLIA_USDC_ADDRESS = 0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n
-const TokenMetadataContract = createContract(TOKEN_METADATA_ABI)
 
 export type AssetBalance =
 	| { readonly status: 'available', readonly value: bigint }
@@ -75,17 +73,6 @@ async function readAssetBalance(read: () => Promise<bigint>): Promise<AssetBalan
 	} catch (balanceError) {
 		return { status: 'unavailable', error: getUserFacingErrorMessage(balanceError) }
 	}
-}
-
-async function readTokenBalance(provider: InjectedProvider, tokenAddress: bigint, owner: bigint, symbol: string) {
-	const result = funtypes.String.parse(await provider.request({
-		method: 'eth_call',
-		params: [{
-			to: addressString(tokenAddress),
-			data: bytesToHex(TokenMetadataContract.balanceOf.encodeInput(addressString(owner))),
-		}, 'latest'],
-	}))
-	return TokenMetadataContract.balanceOf.decodeOutput(bytesFromHex(ensureHex(result, `${ symbol } balanceOf result`)))
 }
 
 export async function readNativeAssetBalance(provider: InjectedProvider, address: bigint, chainId: bigint): Promise<NativeAssetBalance> {

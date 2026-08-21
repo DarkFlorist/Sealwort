@@ -2,7 +2,9 @@ import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, TOKENS, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
-import { amountTokenReferences, ContractMetadataUnavailableError, decodeTransactionData, readIsErc721, readTokenDecimals, readVaultAsset, resolveAmbiguousSafeTransfer } from '../src/app/transactionData.js'
+import { ContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/contractMetadata.js'
+import { decodeTransactionData, resolveAmbiguousSafeTransfer } from '../src/app/transactionDecoder.js'
+import { amountTokenForArgument, amountTokenReferences } from '../src/app/transactionSemantics.js'
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
@@ -153,6 +155,12 @@ describe('transaction calldata parsing', () => {
 		const nativeAsset = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 		const trade = decodeTransactionData(BigInt(kyberAddress), kyber.trade!.encodeInput({ src: firstAddress, srcAmount: 100n, dest: nativeAsset, destAddress: secondAddress, maxDestAmount: 90n, minConversionRate: 1n, platformWallet: secondAddress }))
 		assert.deepEqual(trade.status === 'decoded' ? amountTokenReferences(trade.call) : [], [BigInt(firstAddress), 'native'])
+	})
+
+	test('does not infer token semantics from unrelated argument-name substrings', () => {
+		const call = { name: 'unrelated', signature: 'unrelated(uint256,uint256)', arguments: { amountETH: 1n, amountIn: 2n } }
+		assert.equal(amountTokenForArgument(call, 'amountETH', call.arguments), undefined)
+		assert.equal(amountTokenForArgument(call, 'amountIn', call.arguments), undefined)
 	})
 
 	test('reads a vault asset through its ABI', async () => {

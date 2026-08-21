@@ -1,7 +1,9 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import { isContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from './contractMetadata.js'
 import { getSafeReadProvider } from './readProvider.js'
-import { amountTokenReferences, decodeTransactionData, isContractMetadataUnavailableError, rawTransactionData, readIsErc721, readTokenDecimals, readVaultAsset, resolveAmbiguousSafeTransfer, type TransactionDataDecodeResult } from './transactionData.js'
+import { decodeTransactionData, rawTransactionData, resolveAmbiguousSafeTransfer, type TransactionDataDecodeResult } from './transactionDecoder.js'
+import { amountTokenReferences, tokenMetadataKey } from './transactionSemantics.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
 
@@ -18,10 +20,6 @@ async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
 	const [result] = await Promise.allSettled([promise])
 	if (result === undefined) throw new Error('Promise settlement did not return a result.')
 	return result
-}
-
-function tokenKey(address: bigint) {
-	return address.toString(16)
 }
 
 async function loadMetadata(
@@ -68,16 +66,16 @@ async function loadMetadata(
 	}).filter((address, index, all) => all.indexOf(address) === index)
 	const entries = await Promise.all(addresses.map(async (address) => {
 		const decimalsResult = await settle(readTokenDecimals(provider, address))
-		if (decimalsResult.status === 'fulfilled') return [tokenKey(address), { status: 'available', decimals: decimalsResult.value } satisfies TokenMetadataState] as const
+		if (decimalsResult.status === 'fulfilled') return [tokenMetadataKey(address), { status: 'available', decimals: decimalsResult.value } satisfies TokenMetadataState] as const
 		if (!isContractMetadataUnavailableError(decimalsResult.reason)) {
-			return [tokenKey(address), { status: 'error', message: getUserFacingErrorMessage(decimalsResult.reason) } satisfies TokenMetadataState] as const
+			return [tokenMetadataKey(address), { status: 'error', message: getUserFacingErrorMessage(decimalsResult.reason) } satisfies TokenMetadataState] as const
 		}
 		const nftResult = await settle(readIsErc721(provider, address))
-		if (nftResult.status === 'fulfilled' && nftResult.value) return [tokenKey(address), { status: 'nft' } satisfies TokenMetadataState] as const
+		if (nftResult.status === 'fulfilled' && nftResult.value) return [tokenMetadataKey(address), { status: 'nft' } satisfies TokenMetadataState] as const
 		if (nftResult.status === 'rejected' && !isContractMetadataUnavailableError(nftResult.reason)) {
-			return [tokenKey(address), { status: 'error', message: getUserFacingErrorMessage(nftResult.reason) } satisfies TokenMetadataState] as const
+			return [tokenMetadataKey(address), { status: 'error', message: getUserFacingErrorMessage(nftResult.reason) } satisfies TokenMetadataState] as const
 		}
-		return [tokenKey(address), { status: 'error', message: 'Could not read this token’s decimals.' } satisfies TokenMetadataState] as const
+		return [tokenMetadataKey(address), { status: 'error', message: 'Could not read this token’s decimals.' } satisfies TokenMetadataState] as const
 	}))
 	return { decoded, metadata: { status: 'ready', vaultAsset, vaultAssetError, tokens: Object.fromEntries(entries) } }
 }

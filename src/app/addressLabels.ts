@@ -1,17 +1,14 @@
-import { KYBER_NETWORK_PROXY_CONTRACT, TOKENS, UNISWAP_V2_ROUTER_CONTRACT, UNISWAP_V3_ROUTER_CONTRACT } from 'micro-eth-signer/advanced/abi.js'
-import { METAMASK_SWAP_ROUTER_ADDRESS } from './abis/metaMaskSwapRouter.js'
+import { TOKENS } from 'micro-eth-signer/advanced/abi.js'
+import { TRANSACTION_CONTRACT_LABELS } from './abis/transaction.js'
 import { checksummedAddress } from './ethereum.js'
 
 const MAINNET_TOKEN_LABELS = Object.fromEntries(Object.entries(TOKENS).map(([address, { symbol }]) => [address, symbol]))
 
 export const ADDRESS_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
 	'1': {
+		...TRANSACTION_CONTRACT_LABELS,
 		...MAINNET_TOKEN_LABELS,
 		'0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': 'native asset',
-		[UNISWAP_V2_ROUTER_CONTRACT]: 'Uniswap V2 Router',
-		[UNISWAP_V3_ROUTER_CONTRACT]: 'Uniswap V3 Router',
-		[KYBER_NETWORK_PROXY_CONTRACT]: 'Kyber Network Proxy',
-		[`0x${ METAMASK_SWAP_ROUTER_ADDRESS.toString(16).padStart(40, '0') }`]: 'MetaMask Swap Router',
 	},
 	'11155111': {
 		'0x7b79995e5f793a07bc00c21412e50ecae098e7f9': 'WETH',
