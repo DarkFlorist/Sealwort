@@ -9,6 +9,7 @@ import {
 	SafeStackExport,
 	type SafeTransactionStack,
 } from './safeStackProtocol.js'
+import { readWalletChainId } from './walletConnection.js'
 
 export type ProviderRequest = {
 	readonly method: string
@@ -178,7 +179,7 @@ async function validateSafeStackWithNonceValidator(
 	validateNonce: SafeNonceValidator,
 ) {
 	await validateStackFile(stackExport)
-	const walletChainId = BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' })))
+	const walletChainId = await readWalletChainId(provider)
 	const blockTag = parseBlockTag(await provider.request({ method: 'eth_blockNumber' }))
 	const verifiedStates: VerifiedSafeState[] = []
 	const verifiedEoaOwners = new Set<bigint>()
@@ -219,7 +220,7 @@ async function validateSafeStackWithNonceValidator(
 		}
 		verifiedStates.push(safeState)
 	}
-	const walletChainIdAfterValidation = BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' })))
+	const walletChainIdAfterValidation = await readWalletChainId(provider)
 	if (walletChainIdAfterValidation !== walletChainId) throw new Error('The wallet network changed while the Gnosis Safe stack was being verified. Verify it again.')
 	return verifiedStates
 }

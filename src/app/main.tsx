@@ -104,15 +104,11 @@ export function App({
 	const refreshWalletAndStack = async (
 		provider: InjectedProvider,
 		operationRevision: number,
-		manual: boolean,
+		intent: 'discover' | 'refresh',
 	) => {
 		error.value = undefined
-		const walletIdentity = await loadWallet(provider, operationRevision, false)
+		const walletIdentity = await loadWallet(provider, operationRevision, intent)
 		if (walletIdentity === undefined) return
-		if (walletIdentity.status === 'unavailable') {
-			if (manual) throw walletIdentity.error
-			return
-		}
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
 		const verificationAction = getAutomaticStackVerificationAction(loadedStack !== undefined, walletIdentity.status === 'connected' ? walletIdentity.account : undefined)
@@ -153,7 +149,7 @@ export function App({
 		stackVerificationLoading.value = loadedStack !== undefined
 		try {
 			await Promise.all([
-				refreshWalletAndStack(requestProvider, walletRefreshRevision, manual),
+				refreshWalletAndStack(requestProvider, walletRefreshRevision, manual ? 'refresh' : 'discover'),
 				loadedStack === undefined ? Promise.resolve() : refreshSafeInformation(loadedStack, refreshRevision),
 			])
 		} catch (providerError) {
@@ -216,9 +212,8 @@ export function App({
 		try {
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
-			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
+			const walletIdentity = await loadWallet(provider, connectWalletRevision, 'connect')
 			if (walletIdentity === undefined) return
-			if (walletIdentity.status === 'unavailable') throw walletIdentity.error
 			if (walletIdentity.status === 'disconnected') return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()

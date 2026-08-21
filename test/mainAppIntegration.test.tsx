@@ -241,6 +241,17 @@ describe('Sealwort app wallet workflows', () => {
 		assert.equal(harness.requestedMethods.includes('eth_chainId'), false)
 	})
 
+	test('reports when an interactive connection does not provide an account', async () => {
+		const harness = createProviderHarness({ accounts: [] })
+		window.ethereum = harness.provider
+		render(<App />)
+
+		fireEvent.click(await screen.findByRole('button', { name: 'Connect signer wallet' }))
+
+		await screen.findByText('The wallet did not provide an account.')
+		assert.equal(harness.requestedMethods.includes('eth_chainId'), false)
+	})
+
 	test('stays disconnected without an error when chain discovery times out and retries on connect', async () => {
 		const harness = createProviderHarness({
 			hangingMethod: 'eth_chainId',
