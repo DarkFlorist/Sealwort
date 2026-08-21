@@ -1,87 +1,16 @@
-import { ERC20, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { abiFunctionSignatures } from './abiSignatures.js'
-import { CUSTOM_PAYMENT_ABI } from './abis/customPayment.js'
-import { ERC2612_ABI } from './abis/erc2612.js'
-import { ERC4626_ABI } from './abis/erc4626.js'
-import { ERC7540_ABI } from './abis/erc7540.js'
-import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
-import { KYBER_NETWORK_PROXY_ABI, UNISWAP_V2_ROUTER_ABI, UNISWAP_V3_ROUTER_ABI } from './abis/microDecoder.js'
 import { NATIVE_TOKEN_SENTINEL } from './chainConfiguration.js'
 import { bytesToHex } from './ethereum.js'
 import type { DecodedTransactionData, TransactionDataDecodeResult } from './transactionDecoder.js'
+import { TRANSACTION_DEFINITIONS, type AmountTokenReference, type FunctionRule, type TokenSource } from './transactionDefinitions.js'
 
-export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
-type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: 'first' | 'last' }
-type AmountRules = Readonly<Record<string, TokenSource>>
-type FunctionRule = {
-	readonly amounts?: AmountRules
-	readonly ambiguity?: {
-		readonly erc721Arguments: readonly string[]
-		readonly fallbackArguments: readonly string[]
-	}
-	readonly transactionValue?: { readonly label: string, readonly decimals: number, readonly token: 'destination', readonly fallbackSymbol: string }
-}
+export type { AmountTokenReference } from './transactionDefinitions.js'
 
-const field = (name: string): TokenSource => ({ field: name })
-const path = (end: 'first' | 'last'): TokenSource => ({ path: end })
+const FUNCTION_RULES: Readonly<Record<string, FunctionRule>> = Object.fromEntries(TRANSACTION_DEFINITIONS.flatMap((definition) =>
+	(definition.functions ?? []).flatMap(({ names, rule }) => abiFunctionSignatures(definition.abi, names).map((signature) => [signature, rule] as const)),
+))
 
-const FUNCTION_RULES: Record<string, FunctionRule> = {}
-
-function register(abi: ContractABI | undefined, names: readonly string[], rules: AmountRules) {
-	if (abi === undefined) return
-	for (const signature of abiFunctionSignatures(abi, names)) FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], amounts: rules }
-}
-
-function registerFunction(abi: ContractABI, name: string, rule: FunctionRule) {
-	for (const signature of abiFunctionSignatures(abi, [name])) FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], ...rule }
-}
-
-register(ERC20, ['transfer', 'approve', 'transferFrom'], { value: 'destination' })
-register(ERC2612_ABI, ['permit'], { value: 'destination' })
-register(WETH, ['withdraw'], { wad: 'destination' })
-register(CUSTOM_PAYMENT_ABI, ['transferFromWithReferenceAndFee'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') })
-registerFunction(CUSTOM_PAYMENT_ABI, 'safeTransferFrom', {
-	amounts: { amount: field('tokenAddress') },
-	ambiguity: {
-		erc721Arguments: ['from', 'to', 'tokenId'],
-		fallbackArguments: ['_tokenAddress', '_to', '_amount'],
-	},
-})
-registerFunction(WETH, 'deposit', { transactionValue: { label: 'Amount', decimals: 18, token: 'destination', fallbackSymbol: 'WETH' } })
-register(ERC4626_ABI, ['deposit', 'withdraw'], { assets: 'vaultAsset' })
-register(ERC7540_ABI, ['deposit', 'withdraw', 'requestDeposit'], { assets: 'vaultAsset' })
-register(ERC4626_ABI, ['mint', 'redeem'], { shares: 'destination' })
-register(ERC7540_ABI, ['mint', 'redeem', 'requestRedeem'], { shares: 'destination' })
-register(METAMASK_SWAP_ROUTER_ABI, ['swap'], { amount: field('tokenFrom') })
-register(KYBER_NETWORK_PROXY_ABI, ['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })
-register(UNISWAP_V2_ROUTER_ABI, ['addLiquidity'], {
-	amountADesired: field('tokenA'), amountAMin: field('tokenA'), amountBDesired: field('tokenB'), amountBMin: field('tokenB'),
-})
-register(UNISWAP_V2_ROUTER_ABI, ['addLiquidityETH'], { amountTokenDesired: field('token'), amountTokenMin: field('token'), amountETHMin: 'native' })
-register(UNISWAP_V2_ROUTER_ABI, ['removeLiquidity', 'removeLiquidityWithPermit'], {
-	liquidity: 'liquidity', amountAMin: field('tokenA'), amountBMin: field('tokenB'),
-})
-register(UNISWAP_V2_ROUTER_ABI, ['removeLiquidityETH', 'removeLiquidityETHSupportingFeeOnTransferTokens', 'removeLiquidityETHWithPermit', 'removeLiquidityETHWithPermitSupportingFeeOnTransferTokens'], { liquidity: 'liquidity', amountTokenMin: field('token'), amountETHMin: 'native' })
-register(UNISWAP_V2_ROUTER_ABI, ['swapExactTokensForTokens', 'swapExactTokensForTokensSupportingFeeOnTransferTokens'], { amountIn: path('first'), amountOutMin: path('last') })
-register(UNISWAP_V2_ROUTER_ABI, ['swapTokensForExactTokens'], { amountOut: path('last'), amountInMax: path('first') })
-register(UNISWAP_V2_ROUTER_ABI, ['swapExactTokensForETH', 'swapExactTokensForETHSupportingFeeOnTransferTokens'], { amountIn: path('first'), amountOutMin: 'native' })
-register(UNISWAP_V2_ROUTER_ABI, ['swapTokensForExactETH'], { amountOut: 'native', amountInMax: path('first') })
-register(UNISWAP_V2_ROUTER_ABI, ['swapExactETHForTokens', 'swapExactETHForTokensSupportingFeeOnTransferTokens'], { amountOutMin: path('last') })
-register(UNISWAP_V2_ROUTER_ABI, ['swapETHForExactTokens'], { amountOut: path('last') })
-register(UNISWAP_V3_ROUTER_ABI, ['selfPermit', 'selfPermitIfNecessary'], { value: field('token') })
-register(UNISWAP_V3_ROUTER_ABI, ['sweepToken', 'sweepTokenWithFee'], { amountMinimum: field('token') })
-register(UNISWAP_V3_ROUTER_ABI, ['unwrapWETH9', 'unwrapWETH9WithFee'], { amountMinimum: 'native' })
-register(UNISWAP_V3_ROUTER_ABI, ['exactInput'], { amountIn: path('first'), amountOutMinimum: path('last') })
-register(UNISWAP_V3_ROUTER_ABI, ['exactOutput'], { amountOut: path('first'), amountInMaximum: path('last') })
-register(UNISWAP_V3_ROUTER_ABI, ['exactInputSingle'], { amountIn: field('tokenIn'), amountOutMinimum: field('tokenOut') })
-register(UNISWAP_V3_ROUTER_ABI, ['exactOutputSingle'], { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') })
-
-const NESTED_SCOPE_AMOUNT_RULES: readonly { readonly fields: readonly string[], readonly rules: AmountRules }[] = [
-	{ fields: ['tokenIn', 'tokenOut', 'amountIn', 'amountOutMinimum'], rules: { amountIn: field('tokenIn'), amountOutMinimum: field('tokenOut') } },
-	{ fields: ['tokenIn', 'tokenOut', 'amountOut', 'amountInMaximum'], rules: { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') } },
-	{ fields: ['path', 'amountIn', 'amountOutMinimum'], rules: { amountIn: path('first'), amountOutMinimum: path('last') } },
-	{ fields: ['path', 'amountOut', 'amountInMaximum'], rules: { amountOut: path('first'), amountInMaximum: path('last') } },
-]
+const NESTED_SCOPE_AMOUNT_RULES = TRANSACTION_DEFINITIONS.flatMap(({ nestedAmounts }) => nestedAmounts ?? [])
 
 const ARGUMENT_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
 	amount: 'Amount', amountADesired: 'Token A desired', amountAMin: 'Token A minimum', amountBDesired: 'Token B desired', amountBMin: 'Token B minimum',

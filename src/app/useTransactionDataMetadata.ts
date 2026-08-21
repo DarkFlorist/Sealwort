@@ -16,7 +16,7 @@ export type TransactionAmountMetadataState =
 	| { readonly status: 'ready', readonly vaultAsset: bigint | undefined, readonly vaultAssetError: string | undefined, readonly tokens: Readonly<Record<string, TokenMetadataState>> }
 
 export type TransactionDataMetadataResult = { readonly decoded: TransactionDataDecodeResult, readonly metadata: TransactionAmountMetadataState }
-export type TransactionDataMetadata = Readonly<Record<string, TransactionDataMetadataResult>>
+export type TransactionDataMetadata = readonly (readonly TransactionDataMetadataResult[])[]
 type SettledResult<T> = { readonly status: 'fulfilled', readonly value: T } | { readonly status: 'rejected', readonly reason: unknown }
 
 async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
@@ -75,23 +75,19 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 	return { decoded, metadata: { status: 'ready', vaultAsset, vaultAssetError, tokens: Object.fromEntries(entries) } }
 }
 
-export function transactionDataMetadataKey(chainId: bigint, safeTxHash: bigint) {
-	return `${ chainId.toString() }:${ safeTxHash.toString(16) }`
-}
-
 function stackMetadataRevision(stackExport: SafeStackExport | undefined) {
 	if (stackExport === undefined) return ''
 	return stackExport.stacks.flatMap((stack) => stack.transactions.map((transaction) =>
-		`${ transactionDataMetadataKey(stack.chainId, transaction.safeTxHash) }:${ transaction.safeTx.message.to.toString(16) }:${ rawTransactionData(transaction.safeTx.message.data) }`,
+		`${ stack.chainId.toString() }:${ transaction.safeTxHash.toString(16) }:${ transaction.safeTx.message.to.toString(16) }:${ rawTransactionData(transaction.safeTx.message.data) }`,
 	)).join('|')
 }
 
 function initialMetadata(stackExport: SafeStackExport | undefined): TransactionDataMetadata {
-	if (stackExport === undefined) return {}
-	return Object.fromEntries(stackExport.stacks.flatMap((stack) => stack.transactions.map((transaction) => {
+	if (stackExport === undefined) return []
+	return stackExport.stacks.map((stack) => stack.transactions.map((transaction) => {
 		const decoded = decodeTransactionData(stack.chainId, transaction.safeTx.message.to, transaction.safeTx.message.data)
-		return [transactionDataMetadataKey(stack.chainId, transaction.safeTxHash), { decoded, metadata: { status: needsProvider(decoded) ? 'loading' : 'idle' } }] as const
-	})))
+		return { decoded, metadata: { status: needsProvider(decoded) ? 'loading' : 'idle' } }
+	}))
 }
 
 async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTimeoutMs: number | undefined): Promise<TransactionDataMetadata> {
@@ -105,16 +101,14 @@ async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTime
 		providers.set(key, provider)
 		return provider
 	}
-	const entries = await Promise.all(stackExport.stacks.flatMap((stack) => stack.transactions.map(async (transaction) => {
-		const key = transactionDataMetadataKey(stack.chainId, transaction.safeTxHash)
+	return await Promise.all(stackExport.stacks.map(async (stack) => await Promise.all(stack.transactions.map(async (transaction) => {
 		const decoded = decodeTransactionData(stack.chainId, transaction.safeTx.message.to, transaction.safeTx.message.data)
-		if (!needsProvider(decoded)) return [key, { decoded, metadata: { status: 'idle' } }] as const
+		if (!needsProvider(decoded)) return { decoded, metadata: { status: 'idle' } } as const
 		return await providerForChain(stack.chainId).then((provider) => loadMetadata(decoded, transaction.safeTx.message.to, provider)).then(
-			(result) => [key, result] as const,
-			(metadataError: unknown) => [key, { decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }] as const,
+			(result) => result,
+			(metadataError: unknown) => ({ decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }) as const,
 		)
-	})))
-	return Object.fromEntries(entries)
+	}))))
 }
 
 export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, walletRequestTimeoutMs?: number) {
@@ -130,7 +124,7 @@ export function useTransactionDataMetadata(stackExport: SafeStackExport | undefi
 		}, (metadataError: unknown) => {
 			if (!current) return
 			const message = getUserFacingErrorMessage(metadataError)
-			state.value = { revision, metadata: Object.fromEntries(Object.entries(initial).map(([key, result]) => [key, { decoded: result.decoded, metadata: { status: 'failed', message } }])) }
+			state.value = { revision, metadata: initial.map((stack) => stack.map((result) => ({ decoded: result.decoded, metadata: { status: 'failed', message } }))) }
 		})
 		return () => { current = false }
 	}, [revision, walletRequestTimeoutMs])

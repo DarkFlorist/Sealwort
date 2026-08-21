@@ -1,6 +1,6 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
-import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, TOKENS, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
 import { ContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/contractMetadata.js'
 import { decodeTransactionData } from '../src/app/transactionDecoder.js'
@@ -14,15 +14,19 @@ import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
 import { getChainConfiguration } from '../src/app/chainConfiguration.js'
 import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
 import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
+import { MAINNET_METAMASK_SWAP_ROUTER_ADDRESS } from '../src/app/transactionDefinitions.js'
 
 const destination = 0x1234n
 const firstAddress = '0x0000000000000000000000000000000000001111'
 const secondAddress = '0x0000000000000000000000000000000000002222'
 
+function encodedV3Path(tokens: readonly string[]) {
+	const hex = tokens.map((token, index) => `${ index === 0 ? '' : '000bb8' }${ token.slice(2) }`).join('')
+	return Uint8Array.from(hex.match(/.{2}/gu) ?? [], (byte) => Number.parseInt(byte, 16))
+}
+
 function mainnetMetaMaskSwapRouterAddress() {
-	const address = getChainConfiguration(1n).transactionContracts?.metaMaskSwapRouter
-	if (address === undefined) throw new Error('Missing mainnet MetaMask router test deployment.')
-	return address
+	return MAINNET_METAMASK_SWAP_ROUTER_ADDRESS
 }
 
 type AbiInput = { readonly name?: string, readonly type: string, readonly components?: readonly AbiInput[] }
@@ -178,6 +182,26 @@ describe('transaction calldata parsing', () => {
 		assert.deepEqual(trade.status === 'decoded' ? amountTokenReferences(trade.call) : [], [BigInt(firstAddress), 'native'])
 	})
 
+	test('uses Uniswap V3 exact-output paths in their required reversed encoding', () => {
+		const v3Address = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'UNISWAP V3 ROUTER')?.[0]
+		assert.ok(v3Address !== undefined)
+		const router = createContract(CONTRACTS[v3Address]!.abi as ContractABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const middle = '0x0000000000000000000000000000000000003333'
+		const exactOutput = router.exactOutput!.encodeInput({
+			path: encodedV3Path([secondAddress, middle, firstAddress]),
+			recipient: secondAddress,
+			deadline: 1n,
+			amountOut: 90n,
+			amountInMaximum: 100n,
+		})
+		const decoded = decodeTransactionData(1n, BigInt(v3Address), exactOutput)
+		assert.deepEqual(decoded.status === 'decoded' ? amountTokenReferences(decoded.call) : [], [BigInt(secondAddress), BigInt(firstAddress)])
+
+		const multicall = router.multicall!.encodeInput([exactOutput])
+		const nested = decodeTransactionData(1n, BigInt(v3Address), multicall)
+		assert.deepEqual(nested.status === 'decoded' ? amountTokenReferences(nested.call) : [], [BigInt(secondAddress), BigInt(firstAddress)])
+	})
+
 	test('does not infer token semantics from unrelated argument-name substrings', () => {
 		const call = { name: 'unrelated', signature: 'unrelated(uint256,uint256)', arguments: { amountETH: 1n, amountIn: 2n } }
 		assert.equal(amountTokenForArgument(call, 'amountETH', call.arguments), undefined)
@@ -206,6 +230,8 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('labels every ERC-20 included in the decoder registry', () => {
-		for (const [address, { symbol }] of Object.entries(TOKENS)) assert.equal(getAddressLabel(BigInt(address), 1n), symbol)
+		const expectedTokens = ['UNI', 'BAT', 'USDT', 'USDC', 'WETH', 'WBTC', 'DAI', 'COMP', 'MKR', 'AMPL']
+		assert.deepEqual(getChainConfiguration(1n).tokens.map(({ symbol }) => symbol), expectedTokens)
+		for (const { address, symbol } of getChainConfiguration(1n).tokens) assert.equal(getAddressLabel(address, 1n), symbol)
 	})
 })

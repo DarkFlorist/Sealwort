@@ -8,9 +8,17 @@ function canonicalType(input: AbiInput): string {
 	return `(${ components.map(canonicalType).join(',') })${ input.type.slice('tuple'.length) }`
 }
 
-export function abiFunctionSignatures(abi: ContractABI, names: readonly string[]) {
-	const requestedNames = new Set(names)
-	return abi.flatMap((entry) => entry.type === 'function' && entry.name !== undefined && requestedNames.has(entry.name)
-		? [`${ entry.name }(${ (entry.inputs ?? []).map(canonicalType).join(',') })`]
-		: [])
+export function abiFunctionSignature(entry: AbiInput) {
+	return entry.type === 'function' && entry.name !== undefined
+		? `${ entry.name }(${ (entry.inputs ?? []).map(canonicalType).join(',') })`
+		: undefined
+}
+
+export function abiFunctionSignatures(abi: ContractABI, names?: readonly string[]) {
+	const requestedNames = names === undefined ? undefined : new Set(names)
+	return abi.flatMap((entry) => {
+		if (entry.name === undefined || requestedNames?.has(entry.name) === false) return []
+		const signature = abiFunctionSignature(entry)
+		return signature === undefined ? [] : [signature]
+	})
 }

@@ -496,7 +496,7 @@ export function App({
 					busy = { busy }
 					submittedExecutions = { submittedExecutions.value }
 					transactionActionErrors = { transactionActionErrors.value }
-					transactionDataMetadata = { transactionDataMetadata }
+					transactionDataMetadata = { transactionDataMetadata[stackIndex] ?? [] }
 					onSign = { (transactionIndex, executeAfterSigning) => { void signTransaction(stackIndex, transactionIndex, executeAfterSigning) } }
 					onExecute = { (transactionIndex) => { void executeTransaction(stackIndex, transactionIndex) } }
 				/>) }

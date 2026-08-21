@@ -43,18 +43,21 @@ function createStack(signatures: SafeTransactionStack['transactions'][number]['s
 const availableNativeAsset = { symbol: 'SepoliaETH', balance: { status: 'available', value: 2_000_000_000_000_000n } } as const
 
 type SafeStackPanelProps = Parameters<typeof SafeStackPanel>[0]
-type RenderStackOverrides = Partial<Omit<SafeStackPanelProps, 'transactionDataMetadata'>> & { readonly walletRequestTimeoutMs?: number }
+type RenderStackOverrides = Partial<Omit<SafeStackPanelProps, 'transactionDataMetadata'>> & {
+	readonly walletRequestTimeoutMs?: number
+	readonly transactionDataMetadataOverride?: SafeStackPanelProps['transactionDataMetadata']
+}
 
-function SafeStackPanelWithMetadata({ walletRequestTimeoutMs, ...props }: Omit<SafeStackPanelProps, 'transactionDataMetadata'> & { readonly walletRequestTimeoutMs: number | undefined }) {
+function SafeStackPanelWithMetadata({ walletRequestTimeoutMs, transactionDataMetadataOverride, ...props }: Omit<SafeStackPanelProps, 'transactionDataMetadata'> & { readonly walletRequestTimeoutMs: number | undefined, readonly transactionDataMetadataOverride: SafeStackPanelProps['transactionDataMetadata'] | undefined }) {
 	const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [props.stack] }
 	const transactionDataMetadata = useTransactionDataMetadata(stackExport, walletRequestTimeoutMs)
-	return <SafeStackPanel { ...props } transactionDataMetadata = { transactionDataMetadata } />
+	return <SafeStackPanel { ...props } transactionDataMetadata = { transactionDataMetadataOverride ?? transactionDataMetadata[0] ?? [] } />
 }
 
 function renderStack(overrides: RenderStackOverrides = {}) {
 	const onSignCalls: { transactionIndex: number, execute: boolean }[] = []
 	const onExecuteCalls: number[] = []
-	const { walletRequestTimeoutMs, ...panelOverrides } = overrides
+	const { walletRequestTimeoutMs, transactionDataMetadataOverride, ...panelOverrides } = overrides
 	const props: Omit<SafeStackPanelProps, 'transactionDataMetadata'> = {
 		stack: createStack(),
 		stackIndex: 0,
@@ -78,7 +81,7 @@ function renderStack(overrides: RenderStackOverrides = {}) {
 		onExecute: (transactionIndex) => { onExecuteCalls.push(transactionIndex) },
 		...panelOverrides,
 	}
-	render(<SafeStackPanelWithMetadata { ...props } walletRequestTimeoutMs = { walletRequestTimeoutMs } />)
+	render(<SafeStackPanelWithMetadata { ...props } walletRequestTimeoutMs = { walletRequestTimeoutMs } transactionDataMetadataOverride = { transactionDataMetadataOverride } />)
 	return { onSignCalls, onExecuteCalls }
 }
 
@@ -168,6 +171,11 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.getAllByText('None').some((element) => element.previousElementSibling?.textContent === 'Base gas'), true)
 		assert.equal(screen.getByText('Gas refund disabled').previousElementSibling?.textContent, 'Gas price')
 		assert.equal(screen.getAllByText('Not enabled').length, 2)
+	})
+
+	test('shows a local fallback when transaction metadata is absent', () => {
+		renderStack({ transactionDataMetadataOverride: [] })
+		assert.notEqual(screen.getByText('Invalid calldata: Transaction details unavailable.'), undefined)
 	})
 
 	test('defaults to parsed ERC-20 calldata, reads decimals, and toggles to raw data', async () => {

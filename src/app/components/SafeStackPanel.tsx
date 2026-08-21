@@ -10,7 +10,7 @@ import { LoadingIndicator } from '../Spinner.js'
 import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason, getVisibleExecutionFundingReason } from '../uiState.js'
 import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilities.js'
 import { TransactionDataDetails } from './TransactionDataDetails.js'
-import { transactionDataMetadataKey, type TransactionDataMetadata } from '../useTransactionDataMetadata.js'
+import type { TransactionDataMetadataResult } from '../useTransactionDataMetadata.js'
 
 const ZERO_ADDRESS = 0n
 
@@ -92,7 +92,7 @@ export function SafeStackPanel({
 	readonly busy: boolean
 	readonly submittedExecutions: readonly SubmittedExecution[]
 	readonly transactionActionErrors: readonly TransactionActionError[]
-	readonly transactionDataMetadata: TransactionDataMetadata
+	readonly transactionDataMetadata: readonly TransactionDataMetadataResult[]
 	readonly onSign: (transactionIndex: number, executeAfterSigning: boolean) => void
 	readonly onExecute: (transactionIndex: number) => void
 }) {
@@ -217,8 +217,7 @@ export function SafeStackPanel({
 			const actionDescription = actionDescriptionIds.length === 0 ? undefined : actionDescriptionIds.join(' ')
 			const executionDescriptionIds = [...actionDescriptionIds, visibleExecutionFundingReason === undefined ? undefined : executionFundingReasonId].filter((value) => value !== undefined)
 			const executionDescription = executionDescriptionIds.length === 0 ? undefined : executionDescriptionIds.join(' ')
-			const dataMetadata = transactionDataMetadata[transactionDataMetadataKey(stack.chainId, transaction.safeTxHash)]
-			if (dataMetadata === undefined) throw new Error('Transaction data metadata is missing.')
+			const dataMetadata = transactionDataMetadata[transactionIndex] ?? { decoded: { status: 'error', error: 'Transaction details unavailable.' }, metadata: { status: 'idle' } } as const
 			return <article class = 'transaction' key = { transaction.safeTxHash.toString() }>
 				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready ? '' : ' pending' }` }>{ signatureCount } / { stack.threshold.toString() } signatures</span></div>
 				<dl class = 'details'>
