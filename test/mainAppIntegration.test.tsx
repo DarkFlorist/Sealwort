@@ -259,6 +259,20 @@ describe('Sealwort app wallet workflows', () => {
 		assert.equal(harness.requestedMethods.filter((method) => method === 'eth_chainId').length, 2)
 	})
 
+	test('reports a retryable connection failure without exposing the chain RPC method', async () => {
+		const harness = createProviderHarness({ hangingMethod: 'eth_chainId' })
+		window.ethereum = harness.provider
+		render(<App walletRequestTimeoutMs = { 5 } />)
+
+		const connectButton = await screen.findByRole('button', { name: 'Connect signer wallet' })
+		assert.equal(screen.queryByRole('alert'), null)
+		fireEvent.click(connectButton)
+
+		await screen.findByText('The wallet connection could not be completed. Try connecting again.')
+		assert.equal(screen.queryByText(getWalletRequestTimeoutMessage('eth_chainId')), null)
+		assert.notEqual(screen.getByRole('button', { name: 'Connect signer wallet' }), undefined)
+	})
+
 	test('keeps a connected wallet when stack verification chain discovery times out', async () => {
 		const harness = createProviderHarness({
 			hangingMethod: 'eth_chainId',

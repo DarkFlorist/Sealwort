@@ -21,6 +21,7 @@ import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
+const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
 
 async function getProvider() {
 	if (window.ethereum === undefined) throw new Error('No injected Ethereum wallet was found.')
@@ -213,6 +214,10 @@ export function App({
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
 			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
 			if (walletIdentity === undefined || walletIdentity.status === 'disconnected') return
+			if (walletIdentity.status === 'unavailable') {
+				error.value = WALLET_CONNECTION_UNAVAILABLE_MESSAGE
+				return
+			}
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()
