@@ -248,6 +248,34 @@ describe('Sealwort rendered UI', () => {
 		}
 	})
 
+	test('falls back to a parsed token helper when ERC-721 classification times out', async () => {
+		const data = createContract(CUSTOM_PAYMENT_ABI).safeTransferFrom.encodeInput({
+			_tokenAddress: '0x0000000000000000000000000000000000001111',
+			_to: '0x0000000000000000000000000000000000002222',
+			_amount: 1_500_000n,
+		})
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0xaa36a7'
+			return await new Promise<never>(() => undefined)
+		} }
+		try {
+			renderStack({
+				walletRequestTimeoutMs: 5,
+				stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0x9999n, data } } }] },
+			})
+			assert.equal((await screen.findAllByText('The wallet did not respond to eth_call. Reconnect the wallet and try again.')).length > 0, true)
+			assert.equal(screen.queryByText('Identifying transfer…'), null)
+			assert.notEqual(screen.getByText('Token'), undefined)
+			assert.notEqual(screen.getByText('Recipient'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
 	test('uses destination ERC-165 support to render the shared selector as an ERC-721 transfer', async () => {
 		const erc721 = createContract(ERC721) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const data = erc721['safeTransferFrom(address,address,uint256)']!.encodeInput({

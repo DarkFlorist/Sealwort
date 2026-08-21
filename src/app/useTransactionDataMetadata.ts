@@ -37,10 +37,12 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 
 	if (transactionNeedsErc721Resolution(decoded)) {
 		const interfaceResult = await settle(readIsErc721(provider, destination))
-		if (interfaceResult.status === 'rejected' && !isContractMetadataUnavailableError(interfaceResult.reason)) throw interfaceResult.reason
 		const resolved = resolveTransactionInterpretation(decoded, interfaceResult.status === 'fulfilled' && interfaceResult.value)
 		if (resolved.status !== 'decoded') throw new Error('Resolved transaction data unexpectedly became unavailable.')
 		decoded = resolved
+		if (interfaceResult.status === 'rejected' && !isContractMetadataUnavailableError(interfaceResult.reason)) {
+			return { decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(interfaceResult.reason) } }
+		}
 		references = amountTokenReferences(decoded.call)
 	}
 

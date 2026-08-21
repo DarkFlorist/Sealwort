@@ -6,6 +6,7 @@ export type DecodedTransactionData = {
 	readonly name: string
 	readonly signature: string
 	readonly arguments: Readonly<Record<string, unknown>> | readonly unknown[] | undefined
+	readonly nestedSignatures?: ReadonlyMap<object, string>
 }
 
 export type TransactionDataDecodeResult =
@@ -38,11 +39,42 @@ function uniqueCandidates(decoded: SignatureInfo | readonly SignatureInfo[]) {
 	return candidates.filter((candidate, index) => candidates.findIndex((other) => candidateKey(other) === candidateKey(candidate)) === index)
 }
 
+function splitTopLevelSignatures(value: string) {
+	const signatures: string[] = []
+	let depth = 0
+	let start = 0
+	for (let index = 0; index < value.length; index += 1) {
+		const character = value[index]
+		if (character === '(') depth += 1
+		else if (character === ')') depth -= 1
+		else if (character === ',' && depth === 0) {
+			signatures.push(value.slice(start, index).trim())
+			start = index + 1
+		}
+	}
+	const finalSignature = value.slice(start).trim()
+	if (finalSignature.length > 0) signatures.push(finalSignature)
+	return signatures
+}
+
+function collectNestedSignatures(signature: string, value: unknown, result: Map<object, string>) {
+	if (!signature.startsWith('multicall(') || !signature.endsWith(')') || !Array.isArray(value)) return
+	const signatures = splitTopLevelSignatures(signature.slice('multicall('.length, -1))
+	for (const [index, nestedSignature] of signatures.entries()) {
+		const nestedValue = value[index]
+		if (typeof nestedValue === 'object' && nestedValue !== null) result.set(nestedValue, nestedSignature)
+		collectNestedSignatures(nestedSignature, nestedValue, result)
+	}
+}
+
 function decodedCall(call: SignatureInfo): DecodedTransactionData {
+	const nestedSignatures = new Map<object, string>()
+	collectNestedSignatures(call.signature, call.value, nestedSignatures)
 	return {
 		name: call.name,
 		signature: call.signature,
 		arguments: call.value as Readonly<Record<string, unknown>> | readonly unknown[] | undefined,
+		...(nestedSignatures.size === 0 ? {} : { nestedSignatures }),
 	}
 }
 

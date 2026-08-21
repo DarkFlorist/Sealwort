@@ -19,11 +19,9 @@ export type FunctionRule = {
 	readonly transactionValue?: { readonly label: string, readonly decimals: number, readonly token: 'destination', readonly fallbackSymbol: string }
 }
 export type FunctionRuleDefinition = { readonly names: readonly string[], readonly rule: FunctionRule }
-export type NestedAmountRuleDefinition = { readonly fields: readonly string[], readonly rules: AmountRules }
 export type TransactionDefinition = {
 	readonly abi: ContractABI
 	readonly functions?: readonly FunctionRuleDefinition[]
-	readonly nestedAmounts?: readonly NestedAmountRuleDefinition[]
 	readonly deployment?: RegisteredTransactionContract
 }
 
@@ -33,8 +31,8 @@ const functionRule = (names: readonly string[], amounts: AmountRules): FunctionR
 // Uniswap V3 exact-output paths are encoded backwards: output token first, input token last.
 const exactOutputPathAmounts = { amountOut: path('first'), amountInMaximum: path('last') } as const
 
-function deployedDefinition(deployment: RegisteredTransactionContract, abi: ContractABI | undefined, functions: readonly FunctionRuleDefinition[], nestedAmounts?: readonly NestedAmountRuleDefinition[]): readonly TransactionDefinition[] {
-	return abi === undefined ? [] : [{ abi, functions, ...(nestedAmounts === undefined ? {} : { nestedAmounts }), deployment }]
+function deployedDefinition(deployment: RegisteredTransactionContract, abi: ContractABI | undefined, functions: readonly FunctionRuleDefinition[]): readonly TransactionDefinition[] {
+	return abi === undefined ? [] : [{ abi, functions, deployment }]
 }
 
 const uniswapV2Rules = [
@@ -60,22 +58,14 @@ const uniswapV3Rules = [
 	functionRule(['exactOutputSingle'], { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') }),
 ] as const
 
-const uniswapV3NestedRules = [
-	{ fields: ['tokenIn', 'tokenOut', 'amountIn', 'amountOutMinimum'], rules: { amountIn: field('tokenIn'), amountOutMinimum: field('tokenOut') } },
-	{ fields: ['tokenIn', 'tokenOut', 'amountOut', 'amountInMaximum'], rules: { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') } },
-	{ fields: ['path', 'amountIn', 'amountOutMinimum'], rules: { amountIn: path('first'), amountOutMinimum: path('last') } },
-	{ fields: ['path', 'amountOut', 'amountInMaximum'], rules: exactOutputPathAmounts },
-] as const
-
 type AddressBoundInterpretation = {
 	readonly abi: ContractABI | undefined
 	readonly functions: readonly FunctionRuleDefinition[]
-	readonly nestedAmounts?: readonly NestedAmountRuleDefinition[]
 }
 
 const MAINNET_TRANSACTION_INTERPRETATIONS = {
 	uniswapV2Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address), functions: uniswapV2Rules },
-	uniswapV3Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address), functions: uniswapV3Rules, nestedAmounts: uniswapV3NestedRules },
+	uniswapV3Router: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.uniswapV3Router.address), functions: uniswapV3Rules },
 	kyberNetworkProxy: { abi: microDecoderContractAbi(MAINNET_TRANSACTION_CONTRACTS.kyberNetworkProxy.address), functions: [functionRule(['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })] },
 	metaMaskSwapRouter: { abi: METAMASK_SWAP_ROUTER_ABI, functions: [functionRule(['swap'], { amount: field('tokenFrom') })] },
 } as const satisfies Readonly<Record<keyof typeof MAINNET_TRANSACTION_CONTRACTS, AddressBoundInterpretation>>
@@ -83,7 +73,7 @@ const MAINNET_TRANSACTION_INTERPRETATIONS = {
 const MAINNET_TRANSACTION_DEFINITIONS = (Object.keys(MAINNET_TRANSACTION_CONTRACTS) as (keyof typeof MAINNET_TRANSACTION_CONTRACTS)[]).flatMap((name) => {
 	const deployment = MAINNET_TRANSACTION_CONTRACTS[name]
 	const interpretation: AddressBoundInterpretation = MAINNET_TRANSACTION_INTERPRETATIONS[name]
-	return deployedDefinition(deployment, interpretation.abi, interpretation.functions, interpretation.nestedAmounts)
+	return deployedDefinition(deployment, interpretation.abi, interpretation.functions)
 })
 
 export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [

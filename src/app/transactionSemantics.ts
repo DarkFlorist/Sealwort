@@ -10,8 +10,6 @@ const FUNCTION_RULES: Readonly<Record<string, FunctionRule>> = Object.fromEntrie
 	(definition.functions ?? []).flatMap(({ names, rule }) => abiFunctionSignatures(definition.abi, names).map((signature) => [signature, rule] as const)),
 ))
 
-const NESTED_SCOPE_AMOUNT_RULES = TRANSACTION_DEFINITIONS.flatMap(({ nestedAmounts }) => nestedAmounts ?? [])
-
 const ARGUMENT_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
 	amount: 'Amount', amountADesired: 'Token A desired', amountAMin: 'Token A minimum', amountBDesired: 'Token B desired', amountBMin: 'Token B minimum',
 	amountIn: 'Amount in', amountInMax: 'Maximum amount in', amountInMaximum: 'Maximum amount in', amountOut: 'Amount out', amountOutMin: 'Minimum amount out', amountOutMinimum: 'Minimum amount out', amountMinimum: 'Minimum amount',
@@ -48,9 +46,8 @@ function pathToken(scope: Readonly<Record<string, unknown>>, end: 'first' | 'las
 }
 
 function rulesForScope(call: DecodedTransactionData, scope: Readonly<Record<string, unknown>>) {
-	const direct = FUNCTION_RULES[call.signature]?.amounts
-	if (direct !== undefined) return direct
-	return NESTED_SCOPE_AMOUNT_RULES.find(({ fields }) => fields.every((name) => Object.hasOwn(scope, name)))?.rules
+	const signature = scope === call.arguments ? call.signature : call.nestedSignatures?.get(scope)
+	return signature === undefined ? undefined : FUNCTION_RULES[signature]?.amounts
 }
 
 function resolveSource(source: TokenSource, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {

@@ -206,6 +206,14 @@ describe('transaction calldata parsing', () => {
 		const call = { name: 'unrelated', signature: 'unrelated(uint256,uint256)', arguments: { amountETH: 1n, amountIn: 2n } }
 		assert.equal(amountTokenForArgument(call, 'amountETH', call.arguments), undefined)
 		assert.equal(amountTokenForArgument(call, 'amountIn', call.arguments), undefined)
+		const nested = { path: encodedV3Path([firstAddress, secondAddress]), amountIn: 1n, amountOutMinimum: 2n }
+		const multicall = {
+			name: 'multicall(unrelated)',
+			signature: 'multicall(unrelated((bytes,uint256,uint256)))',
+			arguments: [nested],
+			nestedSignatures: new Map<object, string>([[nested, 'unrelated((bytes,uint256,uint256))']]),
+		}
+		assert.deepEqual(amountTokenReferences(multicall), [])
 	})
 
 	test('keeps address-bound router ABIs and labels on their deployment chain', () => {
