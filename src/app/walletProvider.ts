@@ -17,6 +17,10 @@ export function isWalletRequestTimeoutError(error: unknown, method?: string): er
 	return error instanceof WalletRequestTimeoutError && (method === undefined || error.method === method)
 }
 
+export function isWalletChainDiscoveryTimeout(error: unknown) {
+	return isWalletRequestTimeoutError(error, 'eth_chainId')
+}
+
 function requiresUnlimitedReviewTime(method: string) {
 	return method === 'eth_sendTransaction'
 		|| method === 'eth_sign'
