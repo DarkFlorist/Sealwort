@@ -186,6 +186,27 @@ describe('Sealwort rendered UI', () => {
 		}
 	})
 
+	test('shows unexpected token metadata errors instead of replacing them with a generic message', async () => {
+		const data = createContract(ERC20).transfer.encodeInput({
+			to: '0x0000000000000000000000000000000000005678',
+			value: 1_500_000n,
+		})
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0xaa36a7'
+			throw new Error('Token metadata provider failed unexpectedly.')
+		} }
+		try {
+			renderStack({ stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, data } } }] } })
+			assert.notEqual(await screen.findByText('Token metadata provider failed unexpectedly.'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
 	test('identifies known and connected addresses inline', () => {
 		const stack = createStack()
 		const transaction = stack.transactions[0]

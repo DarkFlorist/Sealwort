@@ -2,7 +2,7 @@ import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
 import { CONTRACTS, createContract, ERC1155, ERC20, TOKENS, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
-import { amountTokenReferences, decodeTransactionData, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/transactionData.js'
+import { amountTokenReferences, ContractMetadataUnavailableError, decodeTransactionData, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/transactionData.js'
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
@@ -51,11 +51,7 @@ function encodedFunctionCalls(abi: ContractABI) {
 				: inputs.every(({ name }) => name !== undefined && name.length > 0)
 					? Object.fromEntries(inputs.map((input) => [input.name!, inputValue(input)]))
 					: inputs.map(inputValue)
-		try {
-			return { name, data: method.encodeInput(value) }
-		} catch (error) {
-			throw new Error(`Could not encode ${ functionSignature(entry) }`, { cause: error })
-		}
+		return { name, data: method.encodeInput(value) }
 	})
 }
 
@@ -76,6 +72,10 @@ describe('transaction calldata parsing', () => {
 	test('validates decimals returned by a token contract', async () => {
 		const provider = { request: async () => `0x${ '0'.repeat(63) }6` }
 		assert.equal(await readTokenDecimals(provider, destination), 6)
+		await assert.rejects(readTokenDecimals({ request: async () => '0x' }, destination), ContractMetadataUnavailableError)
+		await assert.rejects(readTokenDecimals({ request: async () => { throw new Error('execution reverted') } }, destination), ContractMetadataUnavailableError)
+		const unexpected = new Error('Unexpected provider implementation failure.')
+		await assert.rejects(readTokenDecimals({ request: async () => { throw unexpected } }, destination), (error) => error === unexpected)
 	})
 
 	test('decodes both requested payment helper signatures', () => {

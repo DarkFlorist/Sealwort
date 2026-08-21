@@ -3,12 +3,22 @@ import { useEffect, useState } from 'preact/hooks'
 import { getNativeAssetSymbol } from '../accountBalances.js'
 import { getAddressLabel, identifiedAddress } from '../addressLabels.js'
 import { getSafeReadProvider } from '../readProvider.js'
-import { amountTokenForArgument, amountTokenReferences, decodedArguments, decodeTransactionData, formatDecodedValue, formatTokenAmount, hasErc721AmountAmbiguity, rawTransactionData, readIsErc721, readTokenDecimals, readVaultAsset, type AmountTokenReference } from '../transactionData.js'
+import { amountTokenForArgument, amountTokenReferences, decodedArguments, decodeTransactionData, formatDecodedValue, formatTokenAmount, hasErc721AmountAmbiguity, isContractMetadataUnavailableError, rawTransactionData, readIsErc721, readTokenDecimals, readVaultAsset, type AmountTokenReference } from '../transactionData.js'
+import { getUserFacingErrorMessage } from '../userFacingErrors.js'
 
-type TokenState = { readonly status: 'available', readonly decimals: number } | { readonly status: 'nft' | 'error' }
+type TokenState = { readonly status: 'available', readonly decimals: number } | { readonly status: 'nft' } | { readonly status: 'error', readonly message: string }
 type AmountMetadataState =
 	| { readonly status: 'idle' | 'loading' }
-	| { readonly status: 'ready', readonly vaultAsset: bigint | undefined, readonly vaultAssetError: boolean, readonly tokens: Readonly<Record<string, TokenState>> }
+	| { readonly status: 'failed', readonly message: string }
+	| { readonly status: 'ready', readonly vaultAsset: bigint | undefined, readonly vaultAssetError: string | undefined, readonly tokens: Readonly<Record<string, TokenState>> }
+
+type SettledResult<T> = { readonly status: 'fulfilled', readonly value: T } | { readonly status: 'rejected', readonly reason: unknown }
+
+async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
+	const [result] = await Promise.allSettled([promise])
+	if (result === undefined) throw new Error('Promise settlement did not return a result.')
+	return result
+}
 
 function argumentAddress(value: unknown) {
 	return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/u.test(value) ? BigInt(value) : undefined
@@ -120,9 +130,13 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 		setMetadata({ status: 'loading' })
 		void getSafeReadProvider(chainId, window.ethereum).then(async ({ provider }) => {
 			let vaultAsset: bigint | undefined
-			let vaultAssetError = false
+			let vaultAssetError: string | undefined
 			if (references.includes('vaultAsset')) {
-				try { vaultAsset = await readVaultAsset(provider, destination) } catch { vaultAssetError = true }
+				const assetResult = await settle(readVaultAsset(provider, destination))
+				if (assetResult.status === 'fulfilled') vaultAsset = assetResult.value
+				else vaultAssetError = isContractMetadataUnavailableError(assetResult.reason)
+					? 'Could not read this vault’s asset.'
+					: getUserFacingErrorMessage(assetResult.reason)
 			}
 			const addresses = references.flatMap((reference) => {
 				if (reference === 'native' || reference === 'liquidity') return []
@@ -131,22 +145,25 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 				return [reference]
 			}).filter((address, index, all) => all.indexOf(address) === index)
 			const entries = await Promise.all(addresses.map(async (address) => {
-				try {
-					return [tokenKey(address), { status: 'available', decimals: await readTokenDecimals(provider, address) } satisfies TokenState] as const
-				} catch {
-					if (hasErc721AmountAmbiguity(decoded.call)) {
-						try {
-							if (await readIsErc721(provider, address)) return [tokenKey(address), { status: 'nft' } satisfies TokenState] as const
-						} catch { /* Report the original decimals failure below. */ }
-					}
-					return [tokenKey(address), { status: 'error' } satisfies TokenState] as const
+				const decimalsResult = await settle(readTokenDecimals(provider, address))
+				if (decimalsResult.status === 'fulfilled') return [tokenKey(address), { status: 'available', decimals: decimalsResult.value } satisfies TokenState] as const
+				if (!isContractMetadataUnavailableError(decimalsResult.reason)) {
+					return [tokenKey(address), { status: 'error', message: getUserFacingErrorMessage(decimalsResult.reason) } satisfies TokenState] as const
 				}
+				if (hasErc721AmountAmbiguity(decoded.call)) {
+					const nftResult = await settle(readIsErc721(provider, address))
+					if (nftResult.status === 'fulfilled' && nftResult.value) return [tokenKey(address), { status: 'nft' } satisfies TokenState] as const
+					if (nftResult.status === 'rejected' && !isContractMetadataUnavailableError(nftResult.reason)) {
+						return [tokenKey(address), { status: 'error', message: getUserFacingErrorMessage(nftResult.reason) } satisfies TokenState] as const
+					}
+				}
+				return [tokenKey(address), { status: 'error', message: 'Could not read this token’s decimals.' } satisfies TokenState] as const
 			}))
 			return { status: 'ready', vaultAsset, vaultAssetError, tokens: Object.fromEntries(entries) } as const
 		}).then((nextState) => {
 			if (current) setMetadata(nextState)
-		}).catch(() => {
-			if (current) setMetadata({ status: 'ready', vaultAsset: undefined, vaultAssetError: references.includes('vaultAsset'), tokens: {} })
+		}, (metadataError: unknown) => {
+			if (current) setMetadata({ status: 'failed', message: getUserFacingErrorMessage(metadataError) })
 		})
 		return () => { current = false }
 	}, [chainId, destination, raw])
@@ -155,13 +172,14 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 		const address = resolvedTokenAddress(reference, destination, metadata)
 		if (address === 'native') return formatTokenAmount(value, 18, getNativeAssetSymbol(chainId))
 		if (address === 'liquidity') return formatTokenAmount(value, 18, 'LP tokens')
-		if (metadata.status === 'loading') return 'Reading token decimals…'
-		if (reference === 'vaultAsset' && metadata.status === 'ready' && metadata.vaultAssetError) return <span class = 'data-parse-error'>Could not read this vault’s asset.</span>
-		if (address === undefined || metadata.status !== 'ready') return <span class = 'data-parse-error'>Token decimals unavailable.</span>
+		if (metadata.status === 'failed') return <span class = 'data-parse-error'>{ metadata.message }</span>
+		if (metadata.status !== 'ready') return 'Reading token decimals…'
+		if (reference === 'vaultAsset' && metadata.vaultAssetError !== undefined) return <span class = 'data-parse-error'>{ metadata.vaultAssetError }</span>
+		if (address === undefined) return <span class = 'data-parse-error'>Token decimals unavailable.</span>
 		const token = metadata.tokens[tokenKey(address)]
 		if (token?.status === 'available') return formatTokenAmount(value, token.decimals, getAddressLabel(address, chainId))
 		if (token?.status === 'nft') return value.toString()
-		return <span class = 'data-parse-error'>Could not read this token’s decimals.</span>
+		return <span class = 'data-parse-error'>{ token?.message ?? 'Token decimals unavailable.' }</span>
 	}
 	function renderValue(name: string, value: unknown, scope: Readonly<Record<string, unknown>>, key: string): ComponentChildren {
 		const address = argumentAddress(value)
