@@ -83,12 +83,17 @@ const NESTED_SCOPE_AMOUNT_RULES: readonly { readonly fields: readonly string[], 
 	{ fields: ['path', 'amountOut', 'amountInMaximum'], rules: { amountOut: path('first'), amountInMaximum: path('last') } },
 ]
 
-export const ARGUMENT_LABELS: Readonly<Record<string, string>> = {
+const ARGUMENT_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
 	amount: 'Amount', amountADesired: 'Token A desired', amountAMin: 'Token A minimum', amountBDesired: 'Token B desired', amountBMin: 'Token B minimum',
 	amountIn: 'Amount in', amountInMax: 'Maximum amount in', amountInMaximum: 'Maximum amount in', amountOut: 'Amount out', amountOutMin: 'Minimum amount out', amountOutMinimum: 'Minimum amount out', amountMinimum: 'Minimum amount',
 	assets: 'Assets', approved: 'Approved address', aggregatorId: 'Aggregator', controller: 'Controller', data: 'Data', deadline: 'Deadline', dest: 'Destination token', destAddress: 'Recipient', fee: 'Pool fee', feeAddress: 'Fee recipient', feeAmount: 'Fee amount', feeBips: 'Fee (bps)', feeRecipient: 'Fee recipient',
 	from: 'Sender', id: 'Token ID', liquidity: 'Liquidity', maxDestAmount: 'Maximum destination amount', minConversionRate: 'Minimum conversion rate', operator: 'Operator', owner: 'Owner', path: 'Swap path', paymentReference: 'Payment reference', platformWallet: 'Platform wallet', recipient: 'Recipient', receiver: 'Recipient', shares: 'Shares', spender: 'Spender', sqrtPriceLimitX96: 'Price limit', src: 'Source token', srcAmount: 'Source amount', srcQty: 'Source amount',
 	to: 'Recipient', token: 'Token', tokenA: 'Token A', tokenB: 'Token B', tokenAddress: 'Token', tokenFrom: 'Source token', tokenIn: 'Input token', tokenOut: 'Output token', tokenId: 'Token ID', value: 'Amount', wad: 'Amount',
+}
+
+function humanizeArgumentName(name: string) {
+	const words = name.replace(/([a-z0-9])([A-Z])/gu, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/gu, '$1 $2').toLowerCase()
+	return words.length === 0 ? 'Argument' : `${ words[0]!.toUpperCase() }${ words.slice(1) }`
 }
 
 export function isDecodedRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -151,7 +156,7 @@ export function amountTokenReferences(call: DecodedTransactionData) {
 
 export function argumentLabel(name: string, nft: boolean) {
 	if (nft && (name === 'value' || name === 'amount')) return 'Token ID'
-	return ARGUMENT_LABELS[name] ?? name
+	return ARGUMENT_LABEL_OVERRIDES[name] ?? humanizeArgumentName(name)
 }
 
 function hasArgumentNames(call: DecodedTransactionData, names: readonly string[]) {

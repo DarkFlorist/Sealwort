@@ -4,7 +4,7 @@ import { CONTRACTS, createContract, ERC1155, ERC20, ERC721, TOKENS, WETH, type C
 import { getAddressLabel } from '../src/app/addressLabels.js'
 import { ContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/contractMetadata.js'
 import { decodeTransactionData } from '../src/app/transactionDecoder.js'
-import { amountTokenForArgument, amountTokenReferences, resolveTransactionInterpretation, transactionNeedsErc721Resolution, transactionValuePresentation } from '../src/app/transactionSemantics.js'
+import { amountTokenForArgument, amountTokenReferences, argumentLabel, resolveTransactionInterpretation, transactionNeedsErc721Resolution, transactionValuePresentation } from '../src/app/transactionSemantics.js'
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
@@ -73,6 +73,7 @@ describe('transaction calldata parsing', () => {
 			inputs: [{ type: 'tuple[]', components: [{ type: 'address' }, { type: 'uint256' }] }],
 		}] as const
 		assert.deepEqual(abiFunctionSignatures(abi, ['route']), ['route((address,uint256)[])'])
+		assert.equal(argumentLabel('newAmountField', false), 'New amount field')
 	})
 
 	test('decodes ERC-20, ERC-721, ERC-1155, and WETH mint calls', () => {
