@@ -17,14 +17,14 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { isWalletRequestTimeoutError, withWalletRequestTimeout } from './walletProvider.js'
+import { isWalletChainDiscoveryTimeoutError, withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
 
 function getAppUserFacingErrorMessage(error: unknown) {
-	return isWalletRequestTimeoutError(error, 'eth_chainId')
+	return isWalletChainDiscoveryTimeoutError(error)
 		? WALLET_CONNECTION_UNAVAILABLE_MESSAGE
 		: getUserFacingErrorMessage(error)
 }
@@ -115,7 +115,7 @@ export function App({
 	) => {
 		error.value = undefined
 		const walletIdentity = await loadWallet(provider, operationRevision, false).catch((walletLoadError: unknown) => {
-			if (!manual && isWalletRequestTimeoutError(walletLoadError, 'eth_chainId')) return
+			if (!manual && isWalletChainDiscoveryTimeoutError(walletLoadError)) return
 			throw walletLoadError
 		})
 		if (walletIdentity === undefined) return
