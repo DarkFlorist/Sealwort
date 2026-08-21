@@ -21,6 +21,7 @@ import { withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 import { RpcSettings } from './components/RpcSettings.js'
 import { persistEthereumRpcUrl, readPersistedEthereumRpcUrl, validateEthereumRpcUrl } from './rpcSettings.js'
+import { useTransactionDataMetadata } from './useTransactionDataMetadata.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -413,6 +414,7 @@ export function App({
 		if (loadedStack !== undefined) void refreshSafeInformation(loadedStack, stackRevision.peek())
 		return persisted
 	}
+	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, walletRequestTimeoutMs)
 
 	return <main class = 'shell' aria-busy = { busy || loadingApplicationData }>
 		<header class = 'hero'>
@@ -508,6 +510,7 @@ export function App({
 					busy = { busy }
 					submittedExecutions = { submittedExecutions.value }
 					transactionActionErrors = { transactionActionErrors.value }
+					transactionDataMetadata = { transactionDataMetadata[stackIndex] ?? [] }
 					onSign = { (transactionIndex, executeAfterSigning) => { void signTransaction(stackIndex, transactionIndex, executeAfterSigning) } }
 					onExecute = { (transactionIndex) => { void executeTransaction(stackIndex, transactionIndex) } }
 				/>) }

@@ -1,4 +1,5 @@
-import { type AssetBalance, formatTokenBalance } from './accountBalances.js'
+import type { AssetBalance } from './accountBalances.js'
+import { formatTokenBalance } from './assetFormatting.js'
 import type { SafeExecutionGasFunding } from './safeExecution.js'
 
 export type SignatureAvailability = {
