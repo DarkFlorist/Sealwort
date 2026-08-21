@@ -1,3 +1,11 @@
+import { ERC20, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { abiFunctionSignatures } from './abiSignatures.js'
+import { CUSTOM_PAYMENT_ABI } from './abis/customPayment.js'
+import { ERC2612_ABI } from './abis/erc2612.js'
+import { ERC4626_ABI } from './abis/erc4626.js'
+import { ERC7540_ABI } from './abis/erc7540.js'
+import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
+import { KYBER_NETWORK_PROXY_ABI, UNISWAP_V2_ROUTER_ABI, UNISWAP_V3_ROUTER_ABI } from './abis/microDecoder.js'
 import { NATIVE_TOKEN_SENTINEL } from './chainConfiguration.js'
 import { bytesToHex } from './ethereum.js'
 import type { DecodedTransactionData, TransactionDataDecodeResult } from './transactionDecoder.js'
@@ -19,59 +27,54 @@ const path = (end: 'first' | 'last'): TokenSource => ({ path: end })
 
 const FUNCTION_RULES: Record<string, FunctionRule> = {}
 
-function register(signatures: readonly string[], rules: AmountRules) {
-	for (const signature of signatures) FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], amounts: rules }
+function register(abi: ContractABI | undefined, names: readonly string[], rules: AmountRules) {
+	if (abi === undefined) return
+	for (const signature of abiFunctionSignatures(abi, names)) FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], amounts: rules }
 }
 
-function registerFunction(signature: string, rule: FunctionRule) {
-	FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], ...rule }
+function registerFunction(abi: ContractABI, name: string, rule: FunctionRule) {
+	for (const signature of abiFunctionSignatures(abi, [name])) FUNCTION_RULES[signature] = { ...FUNCTION_RULES[signature], ...rule }
 }
 
-register(['transfer(address,uint256)', 'approve(address,uint256)', 'transferFrom(address,address,uint256)', 'permit(address,address,uint256,uint256,uint8,bytes32,bytes32)'], { value: 'destination' })
-register(['withdraw(uint256)'], { wad: 'destination' })
-register(['transferFromWithReferenceAndFee(address,address,uint256,bytes,uint256,address)'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') })
-registerFunction('safeTransferFrom(address,address,uint256)', {
+register(ERC20, ['transfer', 'approve', 'transferFrom'], { value: 'destination' })
+register(ERC2612_ABI, ['permit'], { value: 'destination' })
+register(WETH, ['withdraw'], { wad: 'destination' })
+register(CUSTOM_PAYMENT_ABI, ['transferFromWithReferenceAndFee'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') })
+registerFunction(CUSTOM_PAYMENT_ABI, 'safeTransferFrom', {
 	amounts: { amount: field('tokenAddress') },
 	ambiguity: {
 		erc721Arguments: ['from', 'to', 'tokenId'],
 		fallbackArguments: ['_tokenAddress', '_to', '_amount'],
 	},
 })
-registerFunction('deposit()', { transactionValue: { label: 'Amount', decimals: 18, token: 'destination', fallbackSymbol: 'WETH' } })
-register(['deposit(uint256,address)', 'deposit(uint256,address,address)', 'withdraw(uint256,address,address)', 'requestDeposit(uint256,address,address)'], { assets: 'vaultAsset' })
-register(['mint(uint256,address)', 'mint(uint256,address,address)', 'redeem(uint256,address,address)', 'requestRedeem(uint256,address,address)'], { shares: 'destination' })
-register(['swap(string,address,uint256,bytes)'], { amount: field('tokenFrom') })
-register([
-	'trade(address,uint256,address,address,uint256,uint256,address)',
-	'tradeWithHint(address,uint256,address,address,uint256,uint256,address,bytes)',
-	'tradeWithHintAndFee(address,uint256,address,address,uint256,uint256,address,uint256,bytes)',
-], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })
-register(['addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)'], {
+registerFunction(WETH, 'deposit', { transactionValue: { label: 'Amount', decimals: 18, token: 'destination', fallbackSymbol: 'WETH' } })
+register(ERC4626_ABI, ['deposit', 'withdraw'], { assets: 'vaultAsset' })
+register(ERC7540_ABI, ['deposit', 'withdraw', 'requestDeposit'], { assets: 'vaultAsset' })
+register(ERC4626_ABI, ['mint', 'redeem'], { shares: 'destination' })
+register(ERC7540_ABI, ['mint', 'redeem', 'requestRedeem'], { shares: 'destination' })
+register(METAMASK_SWAP_ROUTER_ABI, ['swap'], { amount: field('tokenFrom') })
+register(KYBER_NETWORK_PROXY_ABI, ['trade', 'tradeWithHint', 'tradeWithHintAndFee'], { srcAmount: field('src'), srcQty: field('src'), maxDestAmount: field('dest') })
+register(UNISWAP_V2_ROUTER_ABI, ['addLiquidity'], {
 	amountADesired: field('tokenA'), amountAMin: field('tokenA'), amountBDesired: field('tokenB'), amountBMin: field('tokenB'),
 })
-register(['addLiquidityETH(address,uint256,uint256,uint256,address,uint256)'], { amountTokenDesired: field('token'), amountTokenMin: field('token'), amountETHMin: 'native' })
-register(['removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)', 'removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)'], {
+register(UNISWAP_V2_ROUTER_ABI, ['addLiquidityETH'], { amountTokenDesired: field('token'), amountTokenMin: field('token'), amountETHMin: 'native' })
+register(UNISWAP_V2_ROUTER_ABI, ['removeLiquidity', 'removeLiquidityWithPermit'], {
 	liquidity: 'liquidity', amountAMin: field('tokenA'), amountBMin: field('tokenB'),
 })
-register([
-	'removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)',
-	'removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)',
-	'removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)',
-	'removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)',
-], { liquidity: 'liquidity', amountTokenMin: field('token'), amountETHMin: 'native' })
-register(['swapExactTokensForTokens(uint256,uint256,address[],address,uint256)', 'swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)'], { amountIn: path('first'), amountOutMin: path('last') })
-register(['swapTokensForExactTokens(uint256,uint256,address[],address,uint256)'], { amountOut: path('last'), amountInMax: path('first') })
-register(['swapExactTokensForETH(uint256,uint256,address[],address,uint256)', 'swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)'], { amountIn: path('first'), amountOutMin: 'native' })
-register(['swapTokensForExactETH(uint256,uint256,address[],address,uint256)'], { amountOut: 'native', amountInMax: path('first') })
-register(['swapExactETHForTokens(uint256,address[],address,uint256)', 'swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)'], { amountOutMin: path('last') })
-register(['swapETHForExactTokens(uint256,address[],address,uint256)'], { amountOut: path('last') })
-register(['selfPermit(address,uint256,uint256,uint8,bytes32,bytes32)', 'selfPermitIfNecessary(address,uint256,uint256,uint8,bytes32,bytes32)'], { value: field('token') })
-register(['sweepToken(address,uint256,address)', 'sweepTokenWithFee(address,uint256,address,uint256,address)'], { amountMinimum: field('token') })
-register(['unwrapWETH9(uint256,address)', 'unwrapWETH9WithFee(uint256,address,uint256,address)'], { amountMinimum: 'native' })
-register(['exactInput((bytes,address,uint256,uint256,uint256))'], { amountIn: path('first'), amountOutMinimum: path('last') })
-register(['exactOutput((bytes,address,uint256,uint256,uint256))'], { amountOut: path('first'), amountInMaximum: path('last') })
-register(['exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))'], { amountIn: field('tokenIn'), amountOutMinimum: field('tokenOut') })
-register(['exactOutputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))'], { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') })
+register(UNISWAP_V2_ROUTER_ABI, ['removeLiquidityETH', 'removeLiquidityETHSupportingFeeOnTransferTokens', 'removeLiquidityETHWithPermit', 'removeLiquidityETHWithPermitSupportingFeeOnTransferTokens'], { liquidity: 'liquidity', amountTokenMin: field('token'), amountETHMin: 'native' })
+register(UNISWAP_V2_ROUTER_ABI, ['swapExactTokensForTokens', 'swapExactTokensForTokensSupportingFeeOnTransferTokens'], { amountIn: path('first'), amountOutMin: path('last') })
+register(UNISWAP_V2_ROUTER_ABI, ['swapTokensForExactTokens'], { amountOut: path('last'), amountInMax: path('first') })
+register(UNISWAP_V2_ROUTER_ABI, ['swapExactTokensForETH', 'swapExactTokensForETHSupportingFeeOnTransferTokens'], { amountIn: path('first'), amountOutMin: 'native' })
+register(UNISWAP_V2_ROUTER_ABI, ['swapTokensForExactETH'], { amountOut: 'native', amountInMax: path('first') })
+register(UNISWAP_V2_ROUTER_ABI, ['swapExactETHForTokens', 'swapExactETHForTokensSupportingFeeOnTransferTokens'], { amountOutMin: path('last') })
+register(UNISWAP_V2_ROUTER_ABI, ['swapETHForExactTokens'], { amountOut: path('last') })
+register(UNISWAP_V3_ROUTER_ABI, ['selfPermit', 'selfPermitIfNecessary'], { value: field('token') })
+register(UNISWAP_V3_ROUTER_ABI, ['sweepToken', 'sweepTokenWithFee'], { amountMinimum: field('token') })
+register(UNISWAP_V3_ROUTER_ABI, ['unwrapWETH9', 'unwrapWETH9WithFee'], { amountMinimum: 'native' })
+register(UNISWAP_V3_ROUTER_ABI, ['exactInput'], { amountIn: path('first'), amountOutMinimum: path('last') })
+register(UNISWAP_V3_ROUTER_ABI, ['exactOutput'], { amountOut: path('first'), amountInMaximum: path('last') })
+register(UNISWAP_V3_ROUTER_ABI, ['exactInputSingle'], { amountIn: field('tokenIn'), amountOutMinimum: field('tokenOut') })
+register(UNISWAP_V3_ROUTER_ABI, ['exactOutputSingle'], { amountOut: field('tokenOut'), amountInMaximum: field('tokenIn') })
 
 const NESTED_SCOPE_AMOUNT_RULES: readonly { readonly fields: readonly string[], readonly rules: AmountRules }[] = [
 	{ fields: ['tokenIn', 'tokenOut', 'amountIn', 'amountOutMinimum'], rules: { amountIn: field('tokenIn'), amountOutMinimum: field('tokenOut') } },

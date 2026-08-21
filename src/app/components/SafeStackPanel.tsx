@@ -10,6 +10,7 @@ import { LoadingIndicator } from '../Spinner.js'
 import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason, getVisibleExecutionFundingReason } from '../uiState.js'
 import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilities.js'
 import { TransactionDataDetails } from './TransactionDataDetails.js'
+import { transactionDataMetadataKey, type TransactionDataMetadata } from '../useTransactionDataMetadata.js'
 
 const ZERO_ADDRESS = 0n
 
@@ -69,7 +70,7 @@ export function SafeStackPanel({
 	busy,
 	submittedExecutions,
 	transactionActionErrors,
-	walletRequestTimeoutMs,
+	transactionDataMetadata,
 	onSign,
 	onExecute,
 }: {
@@ -91,7 +92,7 @@ export function SafeStackPanel({
 	readonly busy: boolean
 	readonly submittedExecutions: readonly SubmittedExecution[]
 	readonly transactionActionErrors: readonly TransactionActionError[]
-	readonly walletRequestTimeoutMs: number | undefined
+	readonly transactionDataMetadata: TransactionDataMetadata
 	readonly onSign: (transactionIndex: number, executeAfterSigning: boolean) => void
 	readonly onExecute: (transactionIndex: number) => void
 }) {
@@ -216,6 +217,8 @@ export function SafeStackPanel({
 			const actionDescription = actionDescriptionIds.length === 0 ? undefined : actionDescriptionIds.join(' ')
 			const executionDescriptionIds = [...actionDescriptionIds, visibleExecutionFundingReason === undefined ? undefined : executionFundingReasonId].filter((value) => value !== undefined)
 			const executionDescription = executionDescriptionIds.length === 0 ? undefined : executionDescriptionIds.join(' ')
+			const dataMetadata = transactionDataMetadata[transactionDataMetadataKey(stack.chainId, transaction.safeTxHash)]
+			if (dataMetadata === undefined) throw new Error('Transaction data metadata is missing.')
 			return <article class = 'transaction' key = { transaction.safeTxHash.toString() }>
 				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready ? '' : ' pending' }` }>{ signatureCount } / { stack.threshold.toString() } signatures</span></div>
 				<dl class = 'details'>
@@ -228,7 +231,7 @@ export function SafeStackPanel({
 					<dt>Gas price</dt><dd>{ transaction.safeTx.message.gasPrice === 0n ? 'Gas refund disabled' : `${ transaction.safeTx.message.gasPrice.toString() } wei` }</dd>
 					<dt>Gas token</dt><dd class = { transaction.safeTx.message.gasToken === ZERO_ADDRESS ? undefined : 'address' }>{ transaction.safeTx.message.gasToken === ZERO_ADDRESS ? transaction.safeTx.message.gasPrice === 0n ? 'Not enabled' : 'Native token' : identifiedAddress(transaction.safeTx.message.gasToken, stack.chainId, account) }</dd>
 					<dt>Refund receiver</dt><dd class = { transaction.safeTx.message.refundReceiver === ZERO_ADDRESS ? undefined : 'address' }>{ transaction.safeTx.message.refundReceiver === ZERO_ADDRESS ? transaction.safeTx.message.gasPrice === 0n ? 'Not enabled' : 'Transaction sender' : identifiedAddress(transaction.safeTx.message.refundReceiver, stack.chainId, account) }</dd>
-					<dt>Data</dt><dd><TransactionDataDetails data = { transaction.safeTx.message.data } destination = { transaction.safeTx.message.to } transactionValue = { transaction.safeTx.message.value } chainId = { stack.chainId } connectedAccount = { account } walletRequestTimeoutMs = { walletRequestTimeoutMs }/></dd>
+					<dt>Data</dt><dd><TransactionDataDetails data = { transaction.safeTx.message.data } destination = { transaction.safeTx.message.to } transactionValue = { transaction.safeTx.message.value } chainId = { stack.chainId } connectedAccount = { account } result = { dataMetadata }/></dd>
 					<dt>Gnosis Safe tx hash</dt><dd class = 'address'>{ `0x${ transaction.safeTxHash.toString(16).padStart(64, '0') }` }</dd>
 					<dt>Signed owners</dt><dd>{ transaction.signatures.length === 0 ? 'None' : transaction.signatures.map(({ signer }) => identifiedAddress(signer, stack.chainId, account)).join(', ') }</dd>
 				</dl>

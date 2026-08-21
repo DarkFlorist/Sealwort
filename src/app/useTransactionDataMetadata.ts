@@ -2,6 +2,8 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { isContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from './contractMetadata.js'
 import { getSafeReadProvider } from './readProvider.js'
+import type { SafeStackExport } from './safeStackProtocol.js'
+import type { InjectedProvider } from './safeStackValidation.js'
 import { decodeTransactionData, rawTransactionData, type TransactionDataDecodeResult } from './transactionDecoder.js'
 import { amountTokenReferences, resolveTransactionInterpretation, tokenMetadataKey, transactionNeedsErc721Resolution } from './transactionSemantics.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
@@ -13,7 +15,8 @@ export type TransactionAmountMetadataState =
 	| { readonly status: 'failed', readonly message: string }
 	| { readonly status: 'ready', readonly vaultAsset: bigint | undefined, readonly vaultAssetError: string | undefined, readonly tokens: Readonly<Record<string, TokenMetadataState>> }
 
-type MetadataResult = { readonly decoded: TransactionDataDecodeResult, readonly metadata: TransactionAmountMetadataState }
+export type TransactionDataMetadataResult = { readonly decoded: TransactionDataDecodeResult, readonly metadata: TransactionAmountMetadataState }
+export type TransactionDataMetadata = Readonly<Record<string, TransactionDataMetadataResult>>
 type SettledResult<T> = { readonly status: 'fulfilled', readonly value: T } | { readonly status: 'rejected', readonly reason: unknown }
 
 async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
@@ -22,22 +25,15 @@ async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
 	return result
 }
 
-async function loadMetadata(
-	initialDecoded: TransactionDataDecodeResult,
-	destination: bigint,
-	chainId: bigint,
-	walletRequestTimeoutMs?: number,
-): Promise<MetadataResult> {
+function needsProvider(decoded: TransactionDataDecodeResult) {
+	return decoded.status === 'decoded' && (transactionNeedsErc721Resolution(decoded)
+		|| amountTokenReferences(decoded.call).some((reference) => reference !== 'native' && reference !== 'liquidity'))
+}
+
+async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destination: bigint, provider: InjectedProvider): Promise<TransactionDataMetadataResult> {
 	if (initialDecoded.status !== 'decoded') return { decoded: initialDecoded, metadata: { status: 'idle' } }
 	let decoded = initialDecoded
 	let references = amountTokenReferences(decoded.call)
-	const needsProvider = transactionNeedsErc721Resolution(decoded)
-		|| references.some((reference) => reference !== 'native' && reference !== 'liquidity')
-	if (!needsProvider) return { decoded, metadata: { status: 'idle' } }
-
-	const injectedProvider = window.ethereum === undefined ? undefined : withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
-	const readProvider = await getSafeReadProvider(chainId, injectedProvider)
-	const provider = withWalletRequestTimeout(readProvider.provider, walletRequestTimeoutMs)
 
 	if (transactionNeedsErc721Resolution(decoded)) {
 		const interfaceResult = await settle(readIsErc721(provider, destination))
@@ -79,26 +75,65 @@ async function loadMetadata(
 	return { decoded, metadata: { status: 'ready', vaultAsset, vaultAssetError, tokens: Object.fromEntries(entries) } }
 }
 
-export function useTransactionDataMetadata(
-	destination: bigint,
-	data: Uint8Array,
-	chainId: bigint,
-	walletRequestTimeoutMs?: number,
-) {
-	const key = `${ chainId.toString() }:${ destination.toString() }:${ rawTransactionData(data) }`
-	const initialDecoded = decodeTransactionData(chainId, destination, data)
-	const state = useSignal<{ readonly key: string, readonly result: MetadataResult }>({ key, result: { decoded: initialDecoded, metadata: { status: 'loading' } } })
+export function transactionDataMetadataKey(chainId: bigint, safeTxHash: bigint) {
+	return `${ chainId.toString() }:${ safeTxHash.toString(16) }`
+}
+
+function stackMetadataRevision(stackExport: SafeStackExport | undefined) {
+	if (stackExport === undefined) return ''
+	return stackExport.stacks.flatMap((stack) => stack.transactions.map((transaction) =>
+		`${ transactionDataMetadataKey(stack.chainId, transaction.safeTxHash) }:${ transaction.safeTx.message.to.toString(16) }:${ rawTransactionData(transaction.safeTx.message.data) }`,
+	)).join('|')
+}
+
+function initialMetadata(stackExport: SafeStackExport | undefined): TransactionDataMetadata {
+	if (stackExport === undefined) return {}
+	return Object.fromEntries(stackExport.stacks.flatMap((stack) => stack.transactions.map((transaction) => {
+		const decoded = decodeTransactionData(stack.chainId, transaction.safeTx.message.to, transaction.safeTx.message.data)
+		return [transactionDataMetadataKey(stack.chainId, transaction.safeTxHash), { decoded, metadata: { status: needsProvider(decoded) ? 'loading' : 'idle' } }] as const
+	})))
+}
+
+async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTimeoutMs: number | undefined): Promise<TransactionDataMetadata> {
+	const injectedProvider = window.ethereum === undefined ? undefined : withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
+	const providers = new Map<string, Promise<InjectedProvider>>()
+	const providerForChain = (chainId: bigint) => {
+		const key = chainId.toString()
+		const existing = providers.get(key)
+		if (existing !== undefined) return existing
+		const provider = getSafeReadProvider(chainId, injectedProvider).then(({ provider: readProvider }) => withWalletRequestTimeout(readProvider, walletRequestTimeoutMs))
+		providers.set(key, provider)
+		return provider
+	}
+	const entries = await Promise.all(stackExport.stacks.flatMap((stack) => stack.transactions.map(async (transaction) => {
+		const key = transactionDataMetadataKey(stack.chainId, transaction.safeTxHash)
+		const decoded = decodeTransactionData(stack.chainId, transaction.safeTx.message.to, transaction.safeTx.message.data)
+		if (!needsProvider(decoded)) return [key, { decoded, metadata: { status: 'idle' } }] as const
+		return await providerForChain(stack.chainId).then((provider) => loadMetadata(decoded, transaction.safeTx.message.to, provider)).then(
+			(result) => [key, result] as const,
+			(metadataError: unknown) => [key, { decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }] as const,
+		)
+	})))
+	return Object.fromEntries(entries)
+}
+
+export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, walletRequestTimeoutMs?: number) {
+	const revision = stackMetadataRevision(stackExport)
+	const initial = initialMetadata(stackExport)
+	const state = useSignal<{ readonly revision: string, readonly metadata: TransactionDataMetadata }>({ revision, metadata: initial })
 
 	useEffect(() => {
 		let current = true
-		state.value = { key, result: { decoded: initialDecoded, metadata: { status: 'loading' } } }
-		void loadMetadata(initialDecoded, destination, chainId, walletRequestTimeoutMs).then((result) => {
-			if (current) state.value = { key, result }
+		state.value = { revision, metadata: initial }
+		if (stackExport !== undefined) void loadStackMetadata(stackExport, walletRequestTimeoutMs).then((metadata) => {
+			if (current) state.value = { revision, metadata }
 		}, (metadataError: unknown) => {
-			if (current) state.value = { key, result: { decoded: initialDecoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } } }
+			if (!current) return
+			const message = getUserFacingErrorMessage(metadataError)
+			state.value = { revision, metadata: Object.fromEntries(Object.entries(initial).map(([key, result]) => [key, { decoded: result.decoded, metadata: { status: 'failed', message } }])) }
 		})
 		return () => { current = false }
-	}, [key, walletRequestTimeoutMs])
+	}, [revision, walletRequestTimeoutMs])
 
-	return state.value.key === key ? state.value.result : { decoded: initialDecoded, metadata: { status: 'loading' } as const }
+	return state.value.revision === revision ? state.value.metadata : initial
 }

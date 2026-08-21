@@ -13,6 +13,7 @@ import { ERC721_SAFE_TRANSFER_WITH_DATA_ABI } from '../src/app/abis/erc721.js'
 import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
 import { getChainConfiguration } from '../src/app/chainConfiguration.js'
 import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
+import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
 
 const destination = 0x1234n
 const firstAddress = '0x0000000000000000000000000000000000001111'
@@ -65,6 +66,15 @@ function encodedFunctionCalls(abi: ContractABI) {
 }
 
 describe('transaction calldata parsing', () => {
+	test('derives canonical semantic keys from ABI function and tuple declarations', () => {
+		const abi = [{
+			type: 'function',
+			name: 'route',
+			inputs: [{ type: 'tuple[]', components: [{ type: 'address' }, { type: 'uint256' }] }],
+		}] as const
+		assert.deepEqual(abiFunctionSignatures(abi, ['route']), ['route((address,uint256)[])'])
+	})
+
 	test('decodes ERC-20, ERC-721, ERC-1155, and WETH mint calls', () => {
 		const calls = [
 			createContract(ERC20).transfer.encodeInput({ to: '0x0000000000000000000000000000000000005678', value: 10n }),

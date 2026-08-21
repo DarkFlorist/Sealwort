@@ -3,7 +3,7 @@ import { afterEach, describe, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact'
 import { createRef } from 'preact'
 import { createSafeTx, getSafeTxHash } from '../src/app/safeProtocol.js'
-import type { SafeTransactionStack } from '../src/app/safeStackProtocol.js'
+import { SAFE_STACK_EXPORT_NAME, SAFE_STACK_FORMAT_VERSION, type SafeStackExport, type SafeTransactionStack } from '../src/app/safeStackProtocol.js'
 import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
@@ -12,6 +12,7 @@ import { CONTRACTS, createContract, ERC20, ERC721, UNISWAP_V2_ROUTER_CONTRACT, U
 import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { dataStringWith0xStart } from '../src/app/ethereum.js'
+import { useTransactionDataMetadata } from '../src/app/useTransactionDataMetadata.js'
 
 afterEach(cleanup)
 
@@ -41,10 +42,20 @@ function createStack(signatures: SafeTransactionStack['transactions'][number]['s
 
 const availableNativeAsset = { symbol: 'SepoliaETH', balance: { status: 'available', value: 2_000_000_000_000_000n } } as const
 
-function renderStack(overrides: Partial<Parameters<typeof SafeStackPanel>[0]> = {}) {
+type SafeStackPanelProps = Parameters<typeof SafeStackPanel>[0]
+type RenderStackOverrides = Partial<Omit<SafeStackPanelProps, 'transactionDataMetadata'>> & { readonly walletRequestTimeoutMs?: number }
+
+function SafeStackPanelWithMetadata({ walletRequestTimeoutMs, ...props }: Omit<SafeStackPanelProps, 'transactionDataMetadata'> & { readonly walletRequestTimeoutMs: number | undefined }) {
+	const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [props.stack] }
+	const transactionDataMetadata = useTransactionDataMetadata(stackExport, walletRequestTimeoutMs)
+	return <SafeStackPanel { ...props } transactionDataMetadata = { transactionDataMetadata } />
+}
+
+function renderStack(overrides: RenderStackOverrides = {}) {
 	const onSignCalls: { transactionIndex: number, execute: boolean }[] = []
 	const onExecuteCalls: number[] = []
-	const props: Parameters<typeof SafeStackPanel>[0] = {
+	const { walletRequestTimeoutMs, ...panelOverrides } = overrides
+	const props: Omit<SafeStackPanelProps, 'transactionDataMetadata'> = {
 		stack: createStack(),
 		stackIndex: 0,
 		account: owner,
@@ -63,12 +74,11 @@ function renderStack(overrides: Partial<Parameters<typeof SafeStackPanel>[0]> = 
 		busy: false,
 		submittedExecutions: [],
 		transactionActionErrors: [],
-		walletRequestTimeoutMs: undefined,
 		onSign: (transactionIndex, execute) => { onSignCalls.push({ transactionIndex, execute }) },
 		onExecute: (transactionIndex) => { onExecuteCalls.push(transactionIndex) },
-		...overrides,
+		...panelOverrides,
 	}
-	render(<SafeStackPanel { ...props } />)
+	render(<SafeStackPanelWithMetadata { ...props } walletRequestTimeoutMs = { walletRequestTimeoutMs } />)
 	return { onSignCalls, onExecuteCalls }
 }
 

@@ -5,7 +5,7 @@ import { getAddressLabel, identifiedAddress } from '../addressLabels.js'
 import { decodedArguments, rawTransactionData } from '../transactionDecoder.js'
 import { formatDecodedValue, formatTokenAmount } from '../transactionFormatting.js'
 import { amountTokenForArgument, argumentLabel, decodedAddress, isDecodedRecord, resolveTokenAddress, tokenMetadataKey, transactionNeedsErc721Resolution, transactionValuePresentation, type AmountTokenReference } from '../transactionSemantics.js'
-import { useTransactionDataMetadata } from '../useTransactionDataMetadata.js'
+import type { TransactionDataMetadataResult } from '../useTransactionDataMetadata.js'
 
 function displayDecodedValue(value: unknown, chainId: bigint, connectedAccount: bigint | undefined): string {
 	const address = decodedAddress(value)
@@ -15,16 +15,16 @@ function displayDecodedValue(value: unknown, chainId: bigint, connectedAccount: 
 	return formatDecodedValue(value)
 }
 
-export function TransactionDataDetails({ data, destination, transactionValue, chainId, connectedAccount, walletRequestTimeoutMs }: {
+export function TransactionDataDetails({ data, destination, transactionValue, chainId, connectedAccount, result }: {
 	readonly data: Uint8Array
 	readonly destination: bigint
 	readonly transactionValue: bigint
 	readonly chainId: bigint
 	readonly connectedAccount: bigint | undefined
-	readonly walletRequestTimeoutMs: number | undefined
+	readonly result: TransactionDataMetadataResult
 }) {
 	const [showParsed, setShowParsed] = useState(true)
-	const { decoded, metadata } = useTransactionDataMetadata(destination, data, chainId, walletRequestTimeoutMs)
+	const { decoded, metadata } = result
 	const raw = rawTransactionData(data)
 	const callValuePresentation = decoded.status === 'decoded' ? transactionValuePresentation(decoded.call) : undefined
 

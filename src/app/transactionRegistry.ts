@@ -1,23 +1,19 @@
-import { CONTRACTS, KYBER_NETWORK_PROXY_CONTRACT, UNISWAP_V2_ROUTER_CONTRACT, UNISWAP_V3_ROUTER_CONTRACT, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
+import { type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
+import { KYBER_NETWORK_PROXY_ABI, UNISWAP_V2_ROUTER_ABI, UNISWAP_V3_ROUTER_ABI } from './abis/microDecoder.js'
 import { TRANSACTION_ABIS } from './abis/transaction.js'
 import { ETHEREUM_MAINNET_CHAIN_ID, getChainConfiguration } from './chainConfiguration.js'
 import { addressString } from './ethereum.js'
 
 type AddressBoundTransactionDefinition = { readonly abi: ContractABI }
 
-function contractAbi(address: string) {
-	const abi = CONTRACTS[address]?.abi
-	return abi === undefined || typeof abi === 'string' ? undefined : abi
-}
-
 function mainnetTransactionDefinitions(): Readonly<Record<string, AddressBoundTransactionDefinition>> {
 	const deployments = getChainConfiguration(ETHEREUM_MAINNET_CHAIN_ID).transactionContracts
 	if (deployments === undefined) return {}
 	const definitions: readonly [string, ContractABI | undefined][] = [
-		[addressString(deployments.uniswapV2Router), contractAbi(UNISWAP_V2_ROUTER_CONTRACT)],
-		[addressString(deployments.uniswapV3Router), contractAbi(UNISWAP_V3_ROUTER_CONTRACT)],
-		[addressString(deployments.kyberNetworkProxy), contractAbi(KYBER_NETWORK_PROXY_CONTRACT)],
+		[addressString(deployments.uniswapV2Router), UNISWAP_V2_ROUTER_ABI],
+		[addressString(deployments.uniswapV3Router), UNISWAP_V3_ROUTER_ABI],
+		[addressString(deployments.kyberNetworkProxy), KYBER_NETWORK_PROXY_ABI],
 		[addressString(deployments.metaMaskSwapRouter), METAMASK_SWAP_ROUTER_ABI],
 	]
 	return Object.fromEntries(definitions.flatMap(([address, abi]) => abi === undefined ? [] : [[address.toLowerCase(), { abi }]]))
