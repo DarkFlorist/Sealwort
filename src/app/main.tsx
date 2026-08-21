@@ -17,10 +17,17 @@ import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
 import { useSafeInformation } from './useSafeInformation.js'
 import { useSubmittedExecutionReceipts } from './useSubmittedExecutionReceipts.js'
-import { getWalletRequestFailurePolicy, withWalletRequestTimeout } from './walletProvider.js'
+import { isWalletRequestTimeoutError, withWalletRequestTimeout } from './walletProvider.js'
 import { BuildInformationLink, type BuildInformation } from './buildInformation.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
+const WALLET_CONNECTION_UNAVAILABLE_MESSAGE = 'The wallet connection could not be completed. Try connecting again.'
+
+function getAppUserFacingErrorMessage(error: unknown) {
+	return isWalletRequestTimeoutError(error, 'eth_chainId')
+		? WALLET_CONNECTION_UNAVAILABLE_MESSAGE
+		: getUserFacingErrorMessage(error)
+}
 
 async function getProvider() {
 	if (window.ethereum === undefined) throw new Error('No injected Ethereum wallet was found.')
@@ -101,30 +108,16 @@ export function App({
 		return await validateSafeStackAtCurrentNonce(provider, loadedStack)
 	}
 
-	const loadWalletIdentity = async <RequestAccess extends boolean>(
-		provider: InjectedProvider,
-		operationRevision: number,
-		requestAccess: RequestAccess,
-		reportUnavailable: boolean,
-	) => {
-		try {
-			return await loadWallet(provider, operationRevision, requestAccess)
-		} catch (walletLoadError) {
-			const failurePolicy = getWalletRequestFailurePolicy(walletLoadError)
-			if (failurePolicy === undefined) throw walletLoadError
-			if (!isCurrentWalletOperation(operationRevision)) return undefined
-			if (reportUnavailable || !failurePolicy.suppressDuringPassiveConnection) throw walletLoadError
-			return undefined
-		}
-	}
-
 	const refreshWalletAndStack = async (
 		provider: InjectedProvider,
 		operationRevision: number,
-		reportUnavailable: boolean,
+		manual: boolean,
 	) => {
 		error.value = undefined
-		const walletIdentity = await loadWalletIdentity(provider, operationRevision, false, reportUnavailable)
+		const walletIdentity = await loadWallet(provider, operationRevision, false).catch((walletLoadError: unknown) => {
+			if (!manual && isWalletRequestTimeoutError(walletLoadError, 'eth_chainId')) return
+			throw walletLoadError
+		})
 		if (walletIdentity === undefined) return
 		const loadedStack = stackExport.peek()
 		const verificationRevision = stackRevision.peek()
@@ -177,7 +170,7 @@ export function App({
 				status.value = undefined
 			}
 			stopWalletLoading(walletRefreshRevision)
-			error.value = getUserFacingErrorMessage(providerError)
+			error.value = getAppUserFacingErrorMessage(providerError)
 		} finally {
 			if (provider === window.ethereum && isCurrentWalletOperation(walletRefreshRevision)) {
 				applicationLoading.value = false
@@ -210,7 +203,7 @@ export function App({
 			applicationLoading.value = false
 			stackVerificationLoading.value = false
 			finishPendingAction('refresh')
-			error.value = getUserFacingErrorMessage(refreshError)
+			error.value = getAppUserFacingErrorMessage(refreshError)
 		}
 	}
 
@@ -229,7 +222,7 @@ export function App({
 		try {
 			error.value = undefined
 			const provider = withWalletRequestTimeout(await getProvider(), walletRequestTimeoutMs)
-			const walletIdentity = await loadWalletIdentity(provider, connectWalletRevision, true, true)
+			const walletIdentity = await loadWallet(provider, connectWalletRevision, true)
 			if (walletIdentity === undefined) return
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
@@ -255,7 +248,7 @@ export function App({
 			}
 			stopWalletLoading(connectWalletRevision)
 			status.value = undefined
-			error.value = getUserFacingErrorMessage(connectError)
+			error.value = getAppUserFacingErrorMessage(connectError)
 		} finally {
 			if (isCurrentStackOperation(stackRevision.peek(), verificationRevision, stackExport.peek(), loadedStackAtVerification)) stackVerificationLoading.value = false
 			if (isCurrentWalletOperation(connectWalletRevision)) finishPendingAction(action)
@@ -303,7 +296,7 @@ export function App({
 		} catch (importError) {
 			if (stackRevision.peek() !== importRevision) return
 			status.value = undefined
-			error.value = getUserFacingErrorMessage(importError)
+			error.value = getAppUserFacingErrorMessage(importError)
 		} finally {
 			if (stackRevision.peek() === importRevision) {
 				stackVerificationLoading.value = false
@@ -334,7 +327,7 @@ export function App({
 		} catch (fileReadError) {
 			if (stackRevision.peek() !== fileReadRevision) return
 			status.value = undefined
-			error.value = getUserFacingErrorMessage(fileReadError)
+			error.value = getAppUserFacingErrorMessage(fileReadError)
 		} finally {
 			if (stackRevision.peek() === fileReadRevision) finishPendingAction(action)
 		}

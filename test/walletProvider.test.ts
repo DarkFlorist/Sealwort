@@ -1,6 +1,6 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
-import { getWalletRequestFailurePolicy, getWalletRequestTimeoutMessage, isWalletRequestTimeoutError, WalletRequestTimeoutError, withWalletRequestTimeout } from '../src/app/walletProvider.js'
+import { getWalletRequestTimeoutMessage, isWalletRequestTimeoutError, withWalletRequestTimeout } from '../src/app/walletProvider.js'
 
 describe('wallet provider request timeout', () => {
 	test('rejects a provider request that never settles with the RPC method in the message', async () => {
@@ -24,14 +24,6 @@ describe('wallet provider request timeout', () => {
 		}, 50)
 
 		assert.equal(await provider.request({ method: 'eth_chainId' }), 'eth_chainId response')
-	})
-
-	test('owns the presentation policy for wallet chain discovery timeouts', () => {
-		assert.deepEqual(getWalletRequestFailurePolicy(new WalletRequestTimeoutError('eth_chainId')), {
-			kind: 'chain-discovery-timeout',
-			suppressDuringPassiveConnection: true,
-		})
-		assert.equal(getWalletRequestFailurePolicy(new WalletRequestTimeoutError('eth_getCode')), undefined)
 	})
 
 	test('allows unlimited review time for signing and transaction submission', async () => {
