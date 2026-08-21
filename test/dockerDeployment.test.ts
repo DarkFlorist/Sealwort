@@ -88,6 +88,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 	const buildScript = await Bun.file(new URL('../scripts/build.mts', import.meta.url)).text()
 	assert.match(buildScript, /entrypoints: \[path\.join\(sourceDirectory, 'app', 'entrypoint\.tsx'\)\]/u)
 	assert.doesNotMatch(buildScript, /bootstrapApplication|getBuildInformation|virtualEntrypoint/u)
+	assert.match(buildScript, /sourcemap: 'none'/u)
 	assert.match(buildScript, /copyFile\(path\.join\(sourceDirectory, 'assets', 'sealwort-botanical\.svg'\), path\.join\(outputAssetsDirectory, 'sealwort-botanical\.svg'\)\)/u)
 
 	const [indexHtml, responseHeaders] = await Promise.all([
@@ -95,6 +96,7 @@ test('ui:docker publishes the production build to host Kubo and verifies its CID
 		Bun.file(new URL('../src/_headers', import.meta.url)).text(),
 	])
 	for (const securityPolicy of [indexHtml, responseHeaders]) {
-		assert.match(securityPolicy, /connect-src 'self' https:\/\/ethereum\.dark\.florist/u)
+		assert.match(securityPolicy, /connect-src https:\/\/ethereum\.dark\.florist/u)
+		assert.doesNotMatch(securityPolicy, /connect-src[^;]*'self'/u)
 	}
 })
