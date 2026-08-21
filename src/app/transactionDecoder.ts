@@ -1,6 +1,6 @@
 import { Decoder, type ContractABI, type SignatureInfo } from 'micro-eth-signer/advanced/abi.js'
-import { transactionAbisForDestination } from './abis/transaction.js'
 import { addressString, bytesToHex, type Hex } from './ethereum.js'
+import { transactionAbisForDestination } from './transactionRegistry.js'
 
 export type DecodedTransactionData = {
 	readonly name: string

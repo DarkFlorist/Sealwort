@@ -10,12 +10,19 @@ import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { ERC7540_ABI } from '../src/app/abis/erc7540.js'
 import { ERC721_SAFE_TRANSFER_WITH_DATA_ABI } from '../src/app/abis/erc721.js'
-import { MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
-import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/abis/transaction.js'
+import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
+import { getChainConfiguration } from '../src/app/chainConfiguration.js'
+import { MAINNET_ADDRESS_BOUND_TRANSACTION_ABIS } from '../src/app/transactionRegistry.js'
 
 const destination = 0x1234n
 const firstAddress = '0x0000000000000000000000000000000000001111'
 const secondAddress = '0x0000000000000000000000000000000000002222'
+
+function mainnetMetaMaskSwapRouterAddress() {
+	const address = getChainConfiguration(1n).transactionContracts?.metaMaskSwapRouter
+	if (address === undefined) throw new Error('Missing mainnet MetaMask router test deployment.')
+	return address
+}
 
 type AbiInput = { readonly name?: string, readonly type: string, readonly components?: readonly AbiInput[] }
 
@@ -149,7 +156,7 @@ describe('transaction calldata parsing', () => {
 		assert.deepEqual(decodedPermit.status === 'decoded' ? amountTokenReferences(decodedPermit.call) : [], ['destination'])
 
 		const metaMask = createContract(METAMASK_SWAP_ROUTER_ABI).swap.encodeInput({ aggregatorId: 'test', tokenFrom: firstAddress, amount: 100n, data: new Uint8Array() })
-		const decodedMetaMask = decodeTransactionData(1n, MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, metaMask)
+		const decodedMetaMask = decodeTransactionData(1n, mainnetMetaMaskSwapRouterAddress(), metaMask)
 		assert.deepEqual(decodedMetaMask.status === 'decoded' ? amountTokenReferences(decodedMetaMask.call) : [], [BigInt(firstAddress)])
 
 		const kyberAddress = Object.entries(CONTRACTS).find(([, contract]) => contract.name === 'KYBER NETWORK PROXY')?.[0]
@@ -168,10 +175,11 @@ describe('transaction calldata parsing', () => {
 
 	test('keeps address-bound router ABIs and labels on their deployment chain', () => {
 		const data = createContract(METAMASK_SWAP_ROUTER_ABI).swap.encodeInput({ aggregatorId: 'test', tokenFrom: firstAddress, amount: 100n, data: new Uint8Array() })
-		assert.equal(decodeTransactionData(1n, MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, data).status, 'decoded')
-		assert.equal(decodeTransactionData(11155111n, MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, data).status, 'unknown')
-		assert.equal(getAddressLabel(MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, 1n), 'MetaMask Swap Router')
-		assert.equal(getAddressLabel(MAINNET_METAMASK_SWAP_ROUTER_ADDRESS, 11155111n), undefined)
+		const address = mainnetMetaMaskSwapRouterAddress()
+		assert.equal(decodeTransactionData(1n, address, data).status, 'decoded')
+		assert.equal(decodeTransactionData(11155111n, address, data).status, 'unknown')
+		assert.equal(getAddressLabel(address, 1n), 'MetaMask Swap Router')
+		assert.equal(getAddressLabel(address, 11155111n), undefined)
 	})
 
 	test('sources WETH deposit value presentation from the function registry', () => {
