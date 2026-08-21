@@ -6,11 +6,14 @@ import { checksummedAddress, dataStringWith0xStart } from '../ethereum.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'
-import { getSafeInformationSourceLabel, type SafeInformationSource } from '../readProvider.js'
 import { getExecutionDisabledReason, getNativeTransferDisabledReason, getSignatureDisabledReason, getVisibleExecutionFundingReason } from '../uiState.js'
 import { getConnectedSafeWalletDuplicateSignerMessage } from '../walletCapabilities.js'
 
-function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState, readonly source: SafeInformationSource | undefined }) {
+function getSafeInformationSourceLabel(source: NonNullable<SafeInformation['source']>) {
+	return source.kind === 'injected' ? 'Injected wallet' : source.host
+}
+
+function SafeStateDetails({ state, source }: { readonly state: VerifiedSafeState, readonly source: SafeInformation['source'] }) {
 	return <dl class = 'details safe-details'>
 		{ source === undefined ? <></> : <><dt>Source</dt><dd>{ getSafeInformationSourceLabel(source) }</dd></> }
 		<dt>Version</dt><dd>{ state.version }</dd>

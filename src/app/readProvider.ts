@@ -7,10 +7,6 @@ export type SafeInformationSource =
 	| { readonly kind: 'rpc', readonly host: string }
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
-export function getSafeInformationSourceLabel(source: SafeInformationSource) {
-	return source.kind === 'injected' ? 'Injected wallet' : source.host
-}
-
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 function parseJsonRpcResponse(value: unknown, expectedId: number) {
