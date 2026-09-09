@@ -44,10 +44,19 @@ function ExecutionSubmissionLabel({ submission, fallback }: {
 	return <>{ fallback }</>
 }
 
-function ExecutionSubmissionDetails({ submission }: { readonly submission: SubmittedExecution | undefined }) {
+function getExecutionTransactionUrl(chainId: bigint, transactionHash: string) {
+	if (chainId === 1n) return `https://etherscan.io/tx/${ transactionHash }`
+	if (chainId === 11155111n) return `https://sepolia.etherscan.io/tx/${ transactionHash }`
+	return undefined
+}
+
+function ExecutionSubmissionDetails({ submission, chainId }: { readonly submission: SubmittedExecution | undefined, readonly chainId: bigint }) {
 	if (submission === undefined) return <></>
 	if (submission.status === 'confirmed') {
-		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { submission.transactionHash }</p>
+		const transactionUrl = getExecutionTransactionUrl(chainId, submission.transactionHash)
+		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { transactionUrl === undefined
+			? submission.transactionHash
+			: <a href = { transactionUrl } target = '_blank' rel = 'noreferrer'>{ submission.transactionHash }</a> }</p>
 	}
 	if (submission.status === 'pending') {
 		return <p class = 'meta'>Gnosis Safe execution transaction submitted: { submission.transactionHash }</p>
@@ -249,7 +258,7 @@ export function SafeStackPanel({
 							{ pendingAction === signAndExecuteAction ? <LoadingIndicator>{ usingConnectedSafeWallet ? 'Confirm execution…' : 'Confirm signature and execution…' }</LoadingIndicator> : <ExecutionSubmissionLabel submission = { submittedExecution } fallback = { usingConnectedSafeWallet ? 'Execute through connected Safe wallet' : 'Sign and execute' }/> }
 						</button> : <></> }
 					</div>
-					<ExecutionSubmissionDetails submission = { submittedExecution }/>
+					<ExecutionSubmissionDetails submission = { submittedExecution } chainId = { stack.chainId }/>
 					{ visibleExecutionFundingReason === undefined ? <></> : <p class = 'transaction-action-disabled-reason' id = { executionFundingReasonId }>{ executionFundingLoading ? <LoadingIndicator>{ visibleExecutionFundingReason }</LoadingIndicator> : visibleExecutionFundingReason }</p> }
 					{ transactionActionError === undefined ? <></> : <p class = 'transaction-action-error' id = { actionErrorId } role = 'alert'>{ transactionActionError }</p> }
 					</div>

@@ -458,14 +458,26 @@ describe('Sealwort rendered UI', () => {
 
 	test('shows an included transaction as executed instead of showing stale signature progress', () => {
 		const stack = { ...createStack([{ signer: owner, signature: '0xsignature' }]), threshold: 2n }
+		const transactionHash = `0x${ '1'.repeat(64) }`
 		renderStack({
 			stack,
-			submittedExecutions: [{ safeTxHash, transactionHash: `0x${ '1'.repeat(64) }`, status: 'confirmed', blockNumber: 25939620n }],
+			submittedExecutions: [{ safeTxHash, transactionHash, status: 'confirmed', blockNumber: 25939620n }],
 		})
 
 		assert.notEqual(screen.getByText('Executed'), undefined)
 		assert.equal(screen.queryByText('1 / 2 signatures'), null)
 		assert.notEqual(screen.getByText(/execution transaction included in block 25939620:/u), undefined)
+		assert.equal(screen.getByRole('link', { name: transactionHash }).getAttribute('href'), `https://sepolia.etherscan.io/tx/${ transactionHash }`)
+	})
+
+	test('links an included mainnet execution transaction to Etherscan', () => {
+		const transactionHash = `0x${ '2'.repeat(64) }`
+		renderStack({
+			stack: { ...createStack([{ signer: owner, signature: '0xsignature' }]), chainId: 1n },
+			submittedExecutions: [{ safeTxHash, transactionHash, status: 'confirmed', blockNumber: 25939620n }],
+		})
+
+		assert.equal(screen.getByRole('link', { name: transactionHash }).getAttribute('href'), `https://etherscan.io/tx/${ transactionHash }`)
 	})
 
 	test('a threshold-ready transaction executes and displays action errors below its controls', () => {
