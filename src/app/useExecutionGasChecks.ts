@@ -8,7 +8,8 @@ import type { VerifiedSafeState } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { getExecutionGasFundingDisabledReason } from './uiState.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
-import { runBackgroundTask } from './unexpectedFailure.js'
+import { runBackgroundTask } from './backgroundTasks.js'
+import { handleUnhandledFailure } from './unhandledFailures.js'
 
 export function useExecutionGasChecks(
 	stackExport: SafeStackExport | undefined,
@@ -69,7 +70,7 @@ export function useExecutionGasChecks(
 		})).then((updatedChecks) => {
 			if (revision.peek() !== checkRevision) return
 			checks.value = updatedChecks
-		}))
+		}), handleUnhandledFailure)
 	}, [stackExport, account, walletChainId, connectedSafeWalletSigners, verifiedSafeStates, walletRequestTimeoutMs])
 
 	return checks
