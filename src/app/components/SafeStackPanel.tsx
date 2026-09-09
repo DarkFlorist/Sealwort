@@ -4,7 +4,7 @@ import { getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../a
 import { formatTokenBalance, getNativeAssetSymbol } from '../assetFormatting.js'
 import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type SubmittedExecution, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
 import { identifiedAddress } from '../addressLabels.js'
-import { getTransactionExplorerUrl } from '../addressRegistry.js'
+import { getTransactionExplorerUrl } from '../explorerLinks.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'

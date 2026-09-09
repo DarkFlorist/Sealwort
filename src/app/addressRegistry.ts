@@ -85,9 +85,8 @@ export function getNativeAssetIdentity(chainId: bigint) {
 	return chainRegistry(chainId).nativeAsset
 }
 
-export function getTransactionExplorerUrl(chainId: bigint, transactionHash: string) {
-	const explorerUrl = chainRegistry(chainId).explorerUrl
-	return explorerUrl === undefined ? undefined : `${ explorerUrl }/tx/${ transactionHash }`
+export function getBlockExplorerUrl(chainId: bigint) {
+	return chainRegistry(chainId).explorerUrl
 }
 
 export function getRegisteredTokens(chainId: bigint) {
