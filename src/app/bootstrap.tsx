@@ -3,7 +3,6 @@ import { useErrorBoundary } from 'preact/hooks'
 import { App } from './main.js'
 import type { BuildInformation } from './buildInformation.js'
 import { reportUnexpectedFailure, unexpectedFailure } from './unexpectedFailure.js'
-import { isMissingMetaMaskError } from './userFacingErrors.js'
 
 function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	return <main class = 'shell'>
@@ -41,9 +40,8 @@ export function bootstrapApplication(buildInformation: BuildInformation | undefi
 			reportUnexpectedFailure(event.error)
 		})
 		window.addEventListener('unhandledrejection', (event) => {
-			if (isMissingMetaMaskError(event.reason)) return
+			if (!reportUnexpectedFailure(event.reason)) return
 			event.preventDefault()
-			reportUnexpectedFailure(event.reason)
 		})
 		render(<AppBoundary buildInformation = { buildInformation } />, app)
 	}
