@@ -3,7 +3,7 @@ import { useErrorBoundary } from 'preact/hooks'
 import { App } from './main.js'
 import type { BuildInformation } from './buildInformation.js'
 import { reportUnexpectedFailure, unexpectedFailure } from './unexpectedFailure.js'
-import { handleUnhandledFailure } from './unhandledFailures.js'
+import { isMissingMetaMaskError } from './userFacingErrors.js'
 
 function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	return <main class = 'shell'>
@@ -42,7 +42,11 @@ export function bootstrapApplication(buildInformation: BuildInformation | undefi
 		})
 		window.addEventListener('unhandledrejection', (event) => {
 			event.preventDefault()
-			handleUnhandledFailure(event.reason)
+			if (isMissingMetaMaskError(event.reason)) {
+				console.warn('Wallet provider unavailable.', event.reason)
+				return
+			}
+			reportUnexpectedFailure(event.reason)
 		})
 		render(<AppBoundary buildInformation = { buildInformation } />, app)
 	}

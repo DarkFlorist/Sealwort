@@ -1,9 +1,7 @@
 import * as assert from 'node:assert'
 import { afterEach, spyOn, test } from 'bun:test'
 import { cleanup, screen } from '@testing-library/preact'
-import { runBackgroundTask } from '../src/app/backgroundTasks.js'
 import { bootstrapApplication } from '../src/app/bootstrap.js'
-import { handleUnhandledFailure } from '../src/app/unhandledFailures.js'
 
 afterEach(() => {
 	cleanup()
@@ -27,14 +25,8 @@ test('keeps the global async failure boundary while ignoring a missing MetaMask 
 	assert.equal(providerRejection.defaultPrevented, true)
 	assert.equal(screen.queryByText('Sealwort encountered an unexpected error'), null)
 	assert.notEqual(screen.getByRole('heading', { name: 'Sealwort' }), undefined)
-	runBackgroundTask(Promise.reject({
-		message: 'Failed to connect to MetaMask',
-		cause: new Error('MetaMask extension not found'),
-	}), handleUnhandledFailure)
-	await Promise.resolve()
-	assert.equal(screen.queryByText('Sealwort encountered an unexpected error'), null)
 	assert.equal(consoleError.mock.calls.length, 0)
-	assert.equal(consoleWarn.mock.calls.length, 2)
+	assert.equal(consoleWarn.mock.calls.length, 1)
 
 	const sealwortRejection = new Event('unhandledrejection', { cancelable: true })
 	Object.defineProperty(sealwortRejection, 'reason', { value: { reason: 'Unexpected async failure' } })

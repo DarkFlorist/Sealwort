@@ -8,7 +8,7 @@ import { EthereumAddress } from './safeStackProtocol.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
 import { readChainId } from './chainDiscovery.js'
 import { runBackgroundTask } from './backgroundTasks.js'
-import { handleUnhandledFailure } from './unhandledFailures.js'
+import { reportUnexpectedFailure } from './unexpectedFailure.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -96,7 +96,7 @@ export function useWalletState() {
 					if (balancesRevision.peek() !== balanceOperationRevision || !isCurrent(operationRevision)) return
 					if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
 					balancesLoading.value = false
-				}), handleUnhandledFailure)
+				}), reportUnexpectedFailure)
 			}
 			information.value = inspectedAccount
 		} finally {
@@ -149,7 +149,7 @@ export function useWalletState() {
 			account.value = selectedAccount
 			chainId.value = selectedChainId
 			const accountInformationPromise = refreshAccountInformation(provider, selectedAccount, selectedChainId, operationRevision)
-			runBackgroundTask(refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision), handleUnhandledFailure)
+			runBackgroundTask(refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision), reportUnexpectedFailure)
 			await accountInformationPromise
 			if (!isCurrent(operationRevision)) return undefined
 			return { status: 'connected', account: selectedAccount, chainId: selectedChainId }

@@ -1,6 +1,6 @@
 import type { RefObject } from 'preact'
 import { runBackgroundTask } from '../backgroundTasks.js'
-import { handleUnhandledFailure } from '../unhandledFailures.js'
+import { reportUnexpectedFailure } from '../unexpectedFailure.js'
 
 function DisclosureButton({ expanded, controls, label, onToggle }: {
 	readonly expanded: boolean
@@ -65,7 +65,7 @@ export function StackJsonInput({ textareaRef, value, expanded, disabled, onValue
 			Choose JSON file
 			<input class = 'file-input' type = 'file' accept = 'application/json,.json' disabled = { disabled } onChange = { (event) => {
 				const input = event.currentTarget
-				runBackgroundTask(onFileChange(input.files?.[0]).finally(() => { input.value = '' }), handleUnhandledFailure)
+				runBackgroundTask(onFileChange(input.files?.[0]).finally(() => { input.value = '' }), reportUnexpectedFailure)
 			} }/>
 		</label></div>
 	</div></section>

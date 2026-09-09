@@ -25,7 +25,7 @@ import { RpcSettings } from './components/RpcSettings.js'
 import { persistEthereumRpcUrl, readPersistedEthereumRpcUrl, validateEthereumRpcUrl } from './rpcSettings.js'
 import { useTransactionDataMetadata } from './useTransactionDataMetadata.js'
 import { runBackgroundTask } from './backgroundTasks.js'
-import { handleUnhandledFailure } from './unhandledFailures.js'
+import { reportUnexpectedFailure } from './unexpectedFailure.js'
 
 const SAFE_STACK_AUTO_IMPORT_DELAY_MS = 250
 
@@ -199,7 +199,7 @@ export function App({
 		if (provider?.on === undefined) return
 		const handleProviderChange = () => {
 			pendingAction.value = undefined
-			runBackgroundTask(refreshEverything(provider, false), handleUnhandledFailure)
+			runBackgroundTask(refreshEverything(provider, false), reportUnexpectedFailure)
 		}
 		provider.on('accountsChanged', handleProviderChange)
 		provider.on('chainChanged', handleProviderChange)
@@ -254,7 +254,7 @@ export function App({
 			verifiedSafeStates.value = verifiedStates
 			stackVerified.value = true
 			status.value = undefined
-			runBackgroundTask(refreshSafeInformation(loadedStackAtVerification, verificationRevision), handleUnhandledFailure)
+			runBackgroundTask(refreshSafeInformation(loadedStackAtVerification, verificationRevision), reportUnexpectedFailure)
 		} catch (connectError) {
 			if (!isCurrentWalletOperation(connectWalletRevision)) return
 			if (isCurrentStackOperation(stackRevision.peek(), verificationRevision, stackExport.peek(), loadedStackAtVerification)) {
@@ -295,7 +295,7 @@ export function App({
 			transactionActionErrors.value = []
 			verifiedSafeStates.value = []
 			lastImportedText.value = text
-			runBackgroundTask(refreshSafeInformation(parsed, importRevision), handleUnhandledFailure)
+			runBackgroundTask(refreshSafeInformation(parsed, importRevision), reportUnexpectedFailure)
 			const transactionCount = parsed.stacks.reduce((count, stack) => count + stack.transactions.length, 0)
 			const verificationAction = getAutomaticStackVerificationAction(true, account.peek())
 			if (verificationAction === 'await-account') {
@@ -373,7 +373,7 @@ export function App({
 		}
 		const timeout = window.setTimeout(() => {
 			if (importText.peek() !== text || lastImportedText.peek() === text) return
-			runBackgroundTask(importStackText(text), handleUnhandledFailure)
+			runBackgroundTask(importStackText(text), reportUnexpectedFailure)
 		}, SAFE_STACK_AUTO_IMPORT_DELAY_MS)
 		return () => {
 			window.clearTimeout(timeout)
@@ -433,7 +433,7 @@ export function App({
 		ethereumRpcUrl.value = validatedUrl
 		const persisted = persistEthereumRpcUrl(browserStorage, validatedUrl)
 		const loadedStack = stackExport.peek()
-		if (loadedStack !== undefined) runBackgroundTask(refreshSafeInformation(loadedStack, stackRevision.peek()), handleUnhandledFailure)
+		if (loadedStack !== undefined) runBackgroundTask(refreshSafeInformation(loadedStack, stackRevision.peek()), reportUnexpectedFailure)
 		return persisted
 	}
 	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, walletRequestTimeoutMs)
@@ -464,8 +464,8 @@ export function App({
 					balances = { currentConnectedSafeBalances }
 					balancesLoading = { connectedSafeBalancesLoading.value }
 					nativeAsset = { currentWalletNativeAsset }
-					onConnect = { () => { runBackgroundTask(connect(), handleUnhandledFailure) } }
-					onRefresh = { () => { runBackgroundTask(refresh(), handleUnhandledFailure) } }
+					onConnect = { () => { runBackgroundTask(connect(), reportUnexpectedFailure) } }
+					onRefresh = { () => { runBackgroundTask(refresh(), reportUnexpectedFailure) } }
 				/>
 			</div>
 		</header>
@@ -533,8 +533,8 @@ export function App({
 					submittedExecutions = { submittedExecutions.value }
 					transactionActionErrors = { transactionActionErrors.value }
 					transactionDataMetadata = { transactionDataMetadata[stackIndex] ?? [] }
-					onSign = { (transactionIndex, executeAfterSigning) => { runBackgroundTask(signTransaction(stackIndex, transactionIndex, executeAfterSigning), handleUnhandledFailure) } }
-					onExecute = { (transactionIndex) => { runBackgroundTask(executeTransaction(stackIndex, transactionIndex), handleUnhandledFailure) } }
+					onSign = { (transactionIndex, executeAfterSigning) => { runBackgroundTask(signTransaction(stackIndex, transactionIndex, executeAfterSigning), reportUnexpectedFailure) } }
+					onExecute = { (transactionIndex) => { runBackgroundTask(executeTransaction(stackIndex, transactionIndex), reportUnexpectedFailure) } }
 				/>) }
 				{ signedStackJson.value === undefined ? <></> : <UpdatedStackPanel
 					textareaRef = { updatedStackTextarea }
