@@ -14,7 +14,7 @@ import { KYBER_NETWORK_PROXY_ABI } from '../src/app/abis/kyberNetworkProxy.js'
 import { METAMASK_SWAP_ROUTER_ABI } from '../src/app/abis/metaMaskSwapRouter.js'
 import { UNISWAP_V2_ROUTER_ABI } from '../src/app/abis/uniswapV2Router.js'
 import { UNISWAP_V3_ROUTER_ABI } from '../src/app/abis/uniswapV3Router.js'
-import { getBalanceToken, getRegisteredTokens, getRegisteredTransactionContracts, MAINNET_TRANSACTION_CONTRACTS } from '../src/app/addressRegistry.js'
+import { getBalanceToken, getRegisteredTokens, getRegisteredTransactionContracts, getTransactionExplorerUrl, MAINNET_TRANSACTION_CONTRACTS } from '../src/app/addressRegistry.js'
 import { abiFunctionSignatures } from '../src/app/abiSignatures.js'
 import { TRANSACTION_DEFINITIONS } from '../src/app/transactionDefinitions.js'
 
@@ -241,6 +241,9 @@ describe('transaction calldata parsing', () => {
 		const sepoliaUsdc = getBalanceToken(11155111n, 'usdc')
 		assert.ok(sepoliaUsdc !== undefined)
 		assert.equal(getAddressLabel(sepoliaUsdc.address, 11155111n), sepoliaUsdc.label)
+		assert.equal(getTransactionExplorerUrl(1n, '0x1234'), 'https://etherscan.io/tx/0x1234')
+		assert.equal(getTransactionExplorerUrl(11155111n, '0x1234'), 'https://sepolia.etherscan.io/tx/0x1234')
+		assert.equal(getTransactionExplorerUrl(10n, '0x1234'), undefined)
 	})
 
 	test('binds every registered transaction contract to an app-owned decoder definition', () => {

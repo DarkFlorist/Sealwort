@@ -4,6 +4,7 @@ import { getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../a
 import { formatTokenBalance, getNativeAssetSymbol } from '../assetFormatting.js'
 import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type SubmittedExecution, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
 import { identifiedAddress } from '../addressLabels.js'
+import { getTransactionExplorerUrl } from '../addressRegistry.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'
@@ -44,16 +45,10 @@ function ExecutionSubmissionLabel({ submission, fallback }: {
 	return <>{ fallback }</>
 }
 
-function getExecutionTransactionUrl(chainId: bigint, transactionHash: string) {
-	if (chainId === 1n) return `https://etherscan.io/tx/${ transactionHash }`
-	if (chainId === 11155111n) return `https://sepolia.etherscan.io/tx/${ transactionHash }`
-	return undefined
-}
-
 function ExecutionSubmissionDetails({ submission, chainId }: { readonly submission: SubmittedExecution | undefined, readonly chainId: bigint }) {
 	if (submission === undefined) return <></>
 	if (submission.status === 'confirmed') {
-		const transactionUrl = getExecutionTransactionUrl(chainId, submission.transactionHash)
+		const transactionUrl = getTransactionExplorerUrl(chainId, submission.transactionHash)
 		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { transactionUrl === undefined
 			? submission.transactionHash
 			: <a href = { transactionUrl } target = '_blank' rel = 'noreferrer'>{ submission.transactionHash }</a> }</p>
