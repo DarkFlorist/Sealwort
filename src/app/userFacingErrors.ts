@@ -45,8 +45,20 @@ function isUserRejectedErrorWithSeen(error: unknown, seen: Set<object>): boolean
 	return providerErrorChildren(error).some((child) => isUserRejectedErrorWithSeen(child, seen))
 }
 
+function hasProviderMessage(error: unknown, expectedMessage: string, seen: Set<object>): boolean {
+	if (typeof error === 'string') return error === expectedMessage
+	if (!isErrorRecord(error) || seen.has(error)) return false
+	seen.add(error)
+	if (messageFromRecord(error) === expectedMessage) return true
+	return providerErrorChildren(error).some((child) => hasProviderMessage(child, expectedMessage, seen))
+}
+
 export function isUserRejectedError(error: unknown): boolean {
 	return isUserRejectedErrorWithSeen(error, new Set<object>())
+}
+
+export function isMissingMetaMaskError(error: unknown): boolean {
+	return hasProviderMessage(error, 'MetaMask extension not found', new Set<object>())
 }
 
 export function getUserFacingErrorMessage(error: unknown) {

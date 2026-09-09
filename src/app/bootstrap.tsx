@@ -3,18 +3,7 @@ import { useErrorBoundary } from 'preact/hooks'
 import { App } from './main.js'
 import type { BuildInformation } from './buildInformation.js'
 import { reportUnexpectedFailure, unexpectedFailure } from './unexpectedFailure.js'
-
-function getRejectionMessage(reason: unknown) {
-	if (typeof reason !== 'object' || reason === null || !('message' in reason)) return undefined
-	return typeof reason.message === 'string' ? reason.message : undefined
-}
-
-function isMissingMetaMaskRejection(reason: unknown) {
-	const message = getRejectionMessage(reason)
-	if (message === 'MetaMask extension not found') return true
-	if (message !== 'Failed to connect to MetaMask' || typeof reason !== 'object' || reason === null || !('cause' in reason)) return false
-	return getRejectionMessage(reason.cause) === 'MetaMask extension not found'
-}
+import { isMissingMetaMaskError } from './userFacingErrors.js'
 
 function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	return <main class = 'shell'>
@@ -52,7 +41,7 @@ export function bootstrapApplication(buildInformation: BuildInformation | undefi
 			reportUnexpectedFailure(event.error)
 		})
 		window.addEventListener('unhandledrejection', (event) => {
-			if (isMissingMetaMaskRejection(event.reason)) return
+			if (isMissingMetaMaskError(event.reason)) return
 			event.preventDefault()
 			reportUnexpectedFailure(event.reason)
 		})
