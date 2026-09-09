@@ -456,6 +456,18 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.queryByRole('button', { name: 'Execute through connected Safe wallet' }), null)
 	})
 
+	test('shows an included transaction as executed instead of showing stale signature progress', () => {
+		const stack = { ...createStack([{ signer: owner, signature: '0xsignature' }]), threshold: 2n }
+		renderStack({
+			stack,
+			submittedExecutions: [{ safeTxHash, transactionHash: `0x${ '1'.repeat(64) }`, status: 'confirmed', blockNumber: 25939620n }],
+		})
+
+		assert.notEqual(screen.getByText('Executed'), undefined)
+		assert.equal(screen.queryByText('1 / 2 signatures'), null)
+		assert.notEqual(screen.getByText(/execution transaction included in block 25939620:/u), undefined)
+	})
+
 	test('a threshold-ready transaction executes and displays action errors below its controls', () => {
 		const stack = createStack([{ signer: owner, signature: '0xsignature' }])
 		const { onExecuteCalls } = renderStack({ stack, transactionActionErrors: [{ safeTxHash, message: 'Wallet failed' }] })

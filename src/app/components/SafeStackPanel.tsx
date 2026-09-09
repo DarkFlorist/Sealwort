@@ -135,6 +135,7 @@ export function SafeStackPanel({
 			const signedByCurrentRoute = hasSafeSignatureFromCurrentRoute(transaction.signatures.map(({ signer }) => signer), account, routedSigner)
 			const submittedExecution = submittedExecutions.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)
 			const executionPending = submittedExecution?.status === 'pending'
+			const executionConfirmed = submittedExecution?.status === 'confirmed'
 			const connectedAccountCanSign = account !== undefined && (account === stack.safeAddress || verifiedSafeState?.owners.some((owner) => owner === account) === true)
 			const matchingConnectedSafeBalanceLoading = usingConnectedSafeWallet && (accountInformationLoading || connectedSafeBalancesLoading) && transactionNativeAsset?.balance.status !== 'available'
 			const safeDataLoading = stackVerificationLoading || currentSafeInformation === undefined || currentSafeInformation.loading
@@ -223,7 +224,7 @@ export function SafeStackPanel({
 			const executionDescription = executionDescriptionIds.length === 0 ? undefined : executionDescriptionIds.join(' ')
 			const dataMetadata = transactionDataMetadata[transactionIndex] ?? { decoded: { status: 'error', error: 'Transaction details unavailable.' }, metadata: { status: 'idle' } } as const
 			return <article class = 'transaction' key = { transaction.safeTxHash.toString() }>
-				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready ? '' : ' pending' }` }>{ signatureCount } / { stack.threshold.toString() } signatures</span></div>
+				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready || executionConfirmed ? '' : ' pending' }` }>{ executionConfirmed ? 'Executed' : <>{ signatureCount } / { stack.threshold.toString() } signatures</> }</span></div>
 				<dl class = 'details'>
 					<dt>Nonce</dt><dd>{ transaction.safeTx.message.nonce.toString() }</dd>
 					<dt>Destination</dt><dd class = 'address'>{ identifiedAddress(transaction.safeTx.message.to, stack.chainId, account) }</dd>
