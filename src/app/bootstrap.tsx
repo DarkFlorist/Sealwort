@@ -6,6 +6,10 @@ import type { BuildInformation } from './buildInformation.js'
 
 const unexpectedFailure = signal(false)
 
+function isSealwortRejection(reason: unknown, scriptUrl: string) {
+	return reason instanceof Error && reason.stack?.includes(scriptUrl) === true
+}
+
 function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	return <main class = 'shell'>
 		<section class = 'panel failure-panel' role = 'alert'>
@@ -42,7 +46,9 @@ export function bootstrapApplication(buildInformation: BuildInformation | undefi
 			console.error('Unexpected Sealwort error.', event.error)
 			unexpectedFailure.value = true
 		})
+		const sealwortScriptUrl = new URL('./js/main.js', document.baseURI).href
 		window.addEventListener('unhandledrejection', (event) => {
+			if (!isSealwortRejection(event.reason, sealwortScriptUrl)) return
 			event.preventDefault()
 			console.error('Unhandled Sealwort promise rejection.', event.reason)
 			unexpectedFailure.value = true
