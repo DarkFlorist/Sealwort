@@ -8,6 +8,7 @@ import type { VerifiedSafeState } from './safeStackValidation.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { getExecutionGasFundingDisabledReason } from './uiState.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
+import { runBackgroundTask } from './unexpectedFailure.js'
 
 export function useExecutionGasChecks(
 	stackExport: SafeStackExport | undefined,
@@ -50,7 +51,7 @@ export function useExecutionGasChecks(
 			})
 		})
 		checks.value = targets.map(({ transaction }) => ({ safeTxHash: transaction.safeTxHash, status: 'loading' }))
-		void Promise.all(targets.map(async ({ stack, transaction, executor, prevalidatedSigner }): Promise<ExecutionGasCheck> => {
+		runBackgroundTask(Promise.all(targets.map(async ({ stack, transaction, executor, prevalidatedSigner }): Promise<ExecutionGasCheck> => {
 			try {
 				const funding = await readSafeExecutionGasFunding(provider, executor, stack.safeAddress, transaction, prevalidatedSigner)
 				return {
@@ -68,7 +69,7 @@ export function useExecutionGasChecks(
 		})).then((updatedChecks) => {
 			if (revision.peek() !== checkRevision) return
 			checks.value = updatedChecks
-		})
+		}))
 	}, [stackExport, account, walletChainId, connectedSafeWalletSigners, verifiedSafeStates, walletRequestTimeoutMs])
 
 	return checks

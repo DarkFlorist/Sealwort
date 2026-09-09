@@ -2,17 +2,14 @@ import * as assert from 'node:assert'
 import { afterEach, spyOn, test } from 'bun:test'
 import { cleanup, screen } from '@testing-library/preact'
 import { bootstrapApplication } from '../src/app/bootstrap.js'
+import { runBackgroundTask } from '../src/app/unexpectedFailure.js'
 
 afterEach(() => {
 	cleanup()
 	document.body.replaceChildren()
-	document.head.querySelector('base')?.remove()
 })
 
-test('attributes only same-script promise rejections to Sealwort', async () => {
-	const base = document.createElement('base')
-	base.href = 'https://sealwort.test/'
-	document.head.append(base)
+test('attributes only registered background task rejections to Sealwort', async () => {
 	const app = document.createElement('div')
 	app.id = 'app'
 	document.body.append(app)
@@ -29,13 +26,8 @@ test('attributes only same-script promise rejections to Sealwort', async () => {
 	assert.notEqual(screen.getByRole('heading', { name: 'Sealwort' }), undefined)
 
 	const consoleError = spyOn(console, 'error').mockImplementation(() => undefined)
-	const sealwortRejection = new Event('unhandledrejection', { cancelable: true })
-	Object.defineProperty(sealwortRejection, 'reason', {
-		value: Object.assign(new Error('Unexpected async failure'), { stack: `Error: Unexpected async failure\n    at ${ new URL('./js/main.js', document.baseURI).href }:2:123` }),
-	})
-	window.dispatchEvent(sealwortRejection)
+	runBackgroundTask(Promise.reject({ reason: 'Unexpected async failure' }))
 
-	assert.equal(sealwortRejection.defaultPrevented, true)
 	assert.notEqual(await screen.findByText('Sealwort encountered an unexpected error'), undefined)
 	assert.equal(consoleError.mock.calls.length, 1)
 })

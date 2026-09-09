@@ -7,6 +7,7 @@ import type { InjectedProvider } from './provider.js'
 import { EthereumAddress } from './safeStackProtocol.js'
 import { getConnectedSafeWalletSigner } from './walletCapabilities.js'
 import { readChainId } from './chainDiscovery.js'
+import { runBackgroundTask } from './unexpectedFailure.js'
 
 const EthereumAccounts = funtypes.ReadonlyArray(EthereumAddress)
 
@@ -86,7 +87,7 @@ export function useWalletState() {
 			if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
 			balancesLoading.value = inspectedAccount.kind === 'safe'
 			if (inspectedAccount.kind === 'safe') {
-				void readConnectedSafeBalances(provider, selectedAccount, selectedChainId).then((updatedBalances) => {
+				runBackgroundTask(readConnectedSafeBalances(provider, selectedAccount, selectedChainId).then((updatedBalances) => {
 					if (balancesRevision.peek() !== balanceOperationRevision || !isCurrent(operationRevision)) return
 					if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
 					balances.value = { address: selectedAccount, chainId: selectedChainId, balances: updatedBalances }
@@ -94,7 +95,7 @@ export function useWalletState() {
 					if (balancesRevision.peek() !== balanceOperationRevision || !isCurrent(operationRevision)) return
 					if (account.peek() !== selectedAccount || chainId.peek() !== selectedChainId) return
 					balancesLoading.value = false
-				})
+				}))
 			}
 			information.value = inspectedAccount
 		} finally {
@@ -147,7 +148,7 @@ export function useWalletState() {
 			account.value = selectedAccount
 			chainId.value = selectedChainId
 			const accountInformationPromise = refreshAccountInformation(provider, selectedAccount, selectedChainId, operationRevision)
-			void refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision)
+			runBackgroundTask(refreshSafeWalletSigner(provider, selectedAccount, selectedChainId, operationRevision))
 			await accountInformationPromise
 			if (!isCurrent(operationRevision)) return undefined
 			return { status: 'connected', account: selectedAccount, chainId: selectedChainId }
