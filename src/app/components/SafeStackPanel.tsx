@@ -4,6 +4,7 @@ import { getPreferredNativeAssetBalance, type ConnectedSafeBalances } from '../a
 import { formatTokenBalance, getNativeAssetSymbol } from '../assetFormatting.js'
 import { type ExecutionGasCheck, type PendingAction, type SafeInformation, type SubmittedExecution, type TransactionActionError, CONNECTED_SAFE_WALLET_EXECUTION_UNAVAILABLE } from '../appTypes.js'
 import { identifiedAddress } from '../addressLabels.js'
+import { getTransactionExplorerUrl } from '../explorerLinks.js'
 import type { SafeTransactionStack } from '../safeStackProtocol.js'
 import { hasSafeSignatureFromCurrentRoute, type VerifiedSafeState } from '../safeStackValidation.js'
 import { LoadingIndicator } from '../Spinner.js'
@@ -44,10 +45,13 @@ function ExecutionSubmissionLabel({ submission, fallback }: {
 	return <>{ fallback }</>
 }
 
-function ExecutionSubmissionDetails({ submission }: { readonly submission: SubmittedExecution | undefined }) {
+function ExecutionSubmissionDetails({ submission, chainId }: { readonly submission: SubmittedExecution | undefined, readonly chainId: bigint }) {
 	if (submission === undefined) return <></>
 	if (submission.status === 'confirmed') {
-		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { submission.transactionHash }</p>
+		const transactionUrl = getTransactionExplorerUrl(chainId, submission.transactionHash)
+		return <p class = 'meta'>Gnosis Safe execution transaction included in block { submission.blockNumber.toString() }: { transactionUrl === undefined
+			? submission.transactionHash
+			: <a href = { transactionUrl } target = '_blank' rel = 'noreferrer'>{ submission.transactionHash }</a> }</p>
 	}
 	if (submission.status === 'pending') {
 		return <p class = 'meta'>Gnosis Safe execution transaction submitted: { submission.transactionHash }</p>
@@ -135,6 +139,7 @@ export function SafeStackPanel({
 			const signedByCurrentRoute = hasSafeSignatureFromCurrentRoute(transaction.signatures.map(({ signer }) => signer), account, routedSigner)
 			const submittedExecution = submittedExecutions.find(({ safeTxHash }) => safeTxHash === transaction.safeTxHash)
 			const executionPending = submittedExecution?.status === 'pending'
+			const executionConfirmed = submittedExecution?.status === 'confirmed'
 			const connectedAccountCanSign = account !== undefined && (account === stack.safeAddress || verifiedSafeState?.owners.some((owner) => owner === account) === true)
 			const matchingConnectedSafeBalanceLoading = usingConnectedSafeWallet && (accountInformationLoading || connectedSafeBalancesLoading) && transactionNativeAsset?.balance.status !== 'available'
 			const safeDataLoading = stackVerificationLoading || currentSafeInformation === undefined || currentSafeInformation.loading
@@ -223,7 +228,7 @@ export function SafeStackPanel({
 			const executionDescription = executionDescriptionIds.length === 0 ? undefined : executionDescriptionIds.join(' ')
 			const dataMetadata = transactionDataMetadata[transactionIndex] ?? { decoded: { status: 'error', error: 'Transaction details unavailable.' }, metadata: { status: 'idle' } } as const
 			return <article class = 'transaction' key = { transaction.safeTxHash.toString() }>
-				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready ? '' : ' pending' }` }>{ signatureCount } / { stack.threshold.toString() } signatures</span></div>
+				<div class = 'transaction-header'><div><h3>Gnosis Safe Transaction { transaction.safeTx.message.nonce.toString() }</h3><p class = 'meta'>{ transaction.websiteOrigin }</p></div><span class = { `badge${ ready || executionConfirmed ? '' : ' pending' }` }>{ executionConfirmed ? 'Executed' : <>{ signatureCount } / { stack.threshold.toString() } signatures</> }</span></div>
 				<dl class = 'details'>
 					<dt>Nonce</dt><dd>{ transaction.safeTx.message.nonce.toString() }</dd>
 					<dt>Destination</dt><dd class = 'address'>{ identifiedAddress(transaction.safeTx.message.to, stack.chainId, account) }</dd>
@@ -248,7 +253,7 @@ export function SafeStackPanel({
 							{ pendingAction === signAndExecuteAction ? <LoadingIndicator>{ usingConnectedSafeWallet ? 'Confirm execution…' : 'Confirm signature and execution…' }</LoadingIndicator> : <ExecutionSubmissionLabel submission = { submittedExecution } fallback = { usingConnectedSafeWallet ? 'Execute through connected Safe wallet' : 'Sign and execute' }/> }
 						</button> : <></> }
 					</div>
-					<ExecutionSubmissionDetails submission = { submittedExecution }/>
+					<ExecutionSubmissionDetails submission = { submittedExecution } chainId = { stack.chainId }/>
 					{ visibleExecutionFundingReason === undefined ? <></> : <p class = 'transaction-action-disabled-reason' id = { executionFundingReasonId }>{ executionFundingLoading ? <LoadingIndicator>{ visibleExecutionFundingReason }</LoadingIndicator> : visibleExecutionFundingReason }</p> }
 					{ transactionActionError === undefined ? <></> : <p class = 'transaction-action-error' id = { actionErrorId } role = 'alert'>{ transactionActionError }</p> }
 					</div>

@@ -6,6 +6,8 @@ import { readSafeExecutionReceipt } from './safeExecution.js'
 import { confirmSubmittedExecution, isPendingExecution, markSubmittedExecutionUnconfirmed, removeSubmittedExecution, setTransactionActionError } from './transactionActionState.js'
 import { getUserFacingErrorMessage } from './userFacingErrors.js'
 import { withWalletRequestTimeout } from './walletProvider.js'
+import { runBackgroundTask } from './backgroundTasks.js'
+import { reportUnexpectedFailure } from './unexpectedFailure.js'
 
 const INITIAL_RECEIPT_POLL_DELAY_MS = 1_000
 const MAX_RECEIPT_POLL_DELAY_MS = 10_000
@@ -83,7 +85,7 @@ export function useSubmittedExecutionReceipts(
 			setTransactionActionError(transactionActionErrors, execution.safeTxHash, `Sealwort stopped checking before this execution receipt was confirmed.${ providerDetail } Refresh to check its on-chain state before trying again.`)
 		}
 
-		void Promise.all(pendingExecutions.map(async (execution) => await monitor(execution)))
+		runBackgroundTask(Promise.all(pendingExecutions.map(async (execution) => await monitor(execution))), reportUnexpectedFailure)
 		return () => { controller.abort() }
 	}, [currentExecutions, initialDelayMs, maximumDelayMs, pollingTimeoutMs, transactionActionErrors, submittedExecutions, walletRequestTimeoutMs])
 }

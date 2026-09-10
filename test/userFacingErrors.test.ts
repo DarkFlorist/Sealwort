@@ -1,6 +1,6 @@
 import * as assert from 'node:assert'
 import { describe, test } from 'bun:test'
-import { getUserFacingErrorMessage, isUserRejectedError, readSafeStackFile } from '../src/app/userFacingErrors.js'
+import { getUserFacingErrorMessage, isMissingMetaMaskError, isUserRejectedError, readSafeStackFile } from '../src/app/userFacingErrors.js'
 import { ChainDiscoveryUnavailableError } from '../src/app/chainDiscoveryError.js'
 
 describe('user-facing errors', () => {
@@ -28,6 +28,19 @@ describe('user-facing errors', () => {
 		const cyclicError: { cause?: unknown } = {}
 		cyclicError.cause = cyclicError
 		assert.equal(isUserRejectedError(cyclicError), false)
+	})
+
+	test('recognizes a missing MetaMask extension through nested provider errors', () => {
+		assert.equal(isMissingMetaMaskError(new Error('MetaMask extension not found')), true)
+		assert.equal(isMissingMetaMaskError({
+			message: 'Failed to connect to MetaMask',
+			data: { originalError: { cause: { message: 'MetaMask extension not found' } } },
+		}), true)
+		assert.equal(isMissingMetaMaskError(new Error('Safe nonce changed.')), false)
+
+		const cyclicError: { cause?: unknown } = {}
+		cyclicError.cause = cyclicError
+		assert.equal(isMissingMetaMaskError(cyclicError), false)
 	})
 
 	test('turns file read failures into an actionable import error', async () => {

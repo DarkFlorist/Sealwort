@@ -1,10 +1,9 @@
-import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { useErrorBoundary } from 'preact/hooks'
 import { App } from './main.js'
 import type { BuildInformation } from './buildInformation.js'
-
-const unexpectedFailure = signal(false)
+import { reportUnexpectedFailure, unexpectedFailure } from './unexpectedFailure.js'
+import { isMissingMetaMaskError } from './userFacingErrors.js'
 
 function FailureScreen({ embedded = false }: { readonly embedded?: boolean }) {
 	return <main class = 'shell'>
@@ -39,13 +38,15 @@ export function bootstrapApplication(buildInformation: BuildInformation | undefi
 	} else {
 		window.addEventListener('error', (event) => {
 			if (event.error === undefined) return
-			console.error('Unexpected Sealwort error.', event.error)
-			unexpectedFailure.value = true
+			reportUnexpectedFailure(event.error)
 		})
 		window.addEventListener('unhandledrejection', (event) => {
 			event.preventDefault()
-			console.error('Unhandled Sealwort promise rejection.', event.reason)
-			unexpectedFailure.value = true
+			if (isMissingMetaMaskError(event.reason)) {
+				console.warn('Wallet provider unavailable.', event.reason)
+				return
+			}
+			reportUnexpectedFailure(event.reason)
 		})
 		render(<AppBoundary buildInformation = { buildInformation } />, app)
 	}

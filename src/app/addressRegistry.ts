@@ -33,6 +33,7 @@ export type RegisteredTransactionContract = (typeof MAINNET_TRANSACTION_CONTRACT
 
 type ChainAddressRegistry = {
 	readonly nativeAsset: NativeAssetIdentity
+	readonly explorerUrl?: string
 	readonly tokens: Readonly<Record<string, RegisteredToken>>
 	readonly transactionContracts: Readonly<Record<string, RegisteredTransactionContract>>
 	readonly balanceTokens: BalanceTokenRegistry
@@ -41,6 +42,7 @@ type ChainAddressRegistry = {
 const CHAIN_ADDRESS_REGISTRIES: Readonly<Record<string, ChainAddressRegistry>> = {
 	[ETHEREUM_MAINNET_CHAIN_ID.toString()]: {
 		nativeAsset: { symbol: 'ETH', label: 'ETH native asset' },
+		explorerUrl: 'https://etherscan.io',
 		tokens: {
 			uni: token(0x1f9840a85d5af5bf1d1762f925bdaddc4201f984n, 'UNI', 'UNI'),
 			bat: token(0x0d8775f648430679a709e98d2b0cb6250d2887efn, 'BAT', 'BAT'),
@@ -58,6 +60,7 @@ const CHAIN_ADDRESS_REGISTRIES: Readonly<Record<string, ChainAddressRegistry>> =
 	},
 	[ETHEREUM_SEPOLIA_CHAIN_ID.toString()]: {
 		nativeAsset: { symbol: 'SepoliaETH', label: 'SepoliaETH native asset' },
+		explorerUrl: 'https://sepolia.etherscan.io',
 		tokens: {
 			weth: token(0x7b79995e5f793a07bc00c21412e50ecae098e7f9n, 'WETH', 'WETH'),
 			usdc: SEPOLIA_USDC,
@@ -80,6 +83,10 @@ function chainRegistry(chainId: bigint) {
 
 export function getNativeAssetIdentity(chainId: bigint) {
 	return chainRegistry(chainId).nativeAsset
+}
+
+export function getBlockExplorerUrl(chainId: bigint) {
+	return chainRegistry(chainId).explorerUrl
 }
 
 export function getRegisteredTokens(chainId: bigint) {
