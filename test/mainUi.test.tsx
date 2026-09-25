@@ -1,10 +1,11 @@
 import * as assert from 'node:assert'
-import { afterEach, describe, test } from 'bun:test'
+import { afterEach, describe, test, spyOn } from 'bun:test'
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact'
 import { createRef } from 'preact'
 import { createSafeTx, getSafeTxHash } from '../src/app/safeProtocol.js'
 import { SAFE_STACK_EXPORT_NAME, SAFE_STACK_FORMAT_VERSION, type SafeStackExport, type SafeTransactionStack } from '../src/app/safeStackProtocol.js'
 import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
+import { TransactionDataDetails } from '../src/app/components/TransactionDataDetails.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
@@ -240,6 +241,70 @@ describe('Sealwort rendered UI', () => {
 			renderStack({ stack: { ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, data } } }] } })
 			assert.notEqual(await screen.findByText('Token metadata provider failed unexpectedly.'), undefined)
 		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	test('retries failed approval metadata on refresh and keeps the raw amount visible', async () => {
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
+		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
+		function Details({ revision }: { revision: number }) {
+			const result = useTransactionDataMetadata(stackExport, undefined, revision)[0]![0]!
+			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } />
+		}
+		const previousEthereum = window.ethereum
+		let authorized = false
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0xaa36a7'
+			if (!authorized) throw { code: 4100, message: 'The requested method and/or account has not been authorized by the user.' }
+			return `0x${ '0'.repeat(63) }6`
+		} }
+		try {
+			const view = render(<Details revision = { 0 } />)
+			await screen.findByText('14411275698 base units')
+			authorized = true
+			view.rerender(<Details revision = { 1 } />)
+			await screen.findByText('14411.275698 tokens')
+			assert.equal(screen.queryByText('14411275698 base units'), null)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
+	for (const walletAvailable of [true, false]) test(`uses only the ${ walletAvailable ? 'wallet' : 'configured RPC' } for approval metadata`, async () => {
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
+		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
+		function Details() {
+			const result = useTransactionDataMetadata(stackExport, undefined, 0, 'https://rpc.example.test')[0]![0]!
+			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { 1n } connectedAccount = { undefined } result = { result } />
+		}
+		const previousEthereum = window.ethereum
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') return '0x1'
+			throw { code: 4100, message: 'Unauthorized' }
+		} }
+		if (!walletAvailable) delete window.ethereum
+		const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+			assert.equal(String(input), 'https://rpc.example.test')
+			const body = JSON.parse(String(init?.body))
+			assert.equal(body.method, 'eth_call')
+			return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: `0x${ '0'.repeat(63) }6` }))
+		}, { preconnect: globalThis.fetch.preconnect }))
+		try {
+			render(<Details />)
+			if (walletAvailable) {
+				await screen.findByText('Unauthorized')
+				assert.notEqual(screen.getByText('14411275698 base units'), undefined)
+			} else await screen.findByText('14411.275698 tokens')
+			assert.equal(fetchMock.mock.calls.length, walletAvailable ? 0 : 1)
+		} finally {
+			fetchMock.mockRestore()
 			if (previousEthereum === undefined) delete window.ethereum
 			else window.ethereum = previousEthereum
 		}

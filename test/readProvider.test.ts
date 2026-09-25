@@ -52,21 +52,19 @@ describe('Safe information read provider', () => {
 		})
 	})
 
-	test('falls back to the mainnet RPC when the injected wallet is on another chain', async () => {
+	for (const failure of ['wrong-chain', 'unauthorized'] as const) test(`does not use the configured RPC after wallet ${ failure }`, async () => {
 		const injectedProvider: InjectedProvider = {
 			async request() {
+				if (failure === 'unauthorized') throw new Error('Unauthorized')
 				return '0xaa36a7'
 			},
 		}
-
-		const selected = await getSafeReadProvider(1n, injectedProvider, async () => jsonResponse({
-			jsonrpc: '2.0',
-			id: 1,
-			result: '0x1',
-		}))
-
-		assert.deepEqual(selected.source, { kind: 'rpc', host: 'ethereum.dark.florist' })
-		assert.equal(await selected.provider.request({ method: 'eth_chainId' }), '0x1')
+		let rpcRequested = false
+		await assert.rejects(getSafeReadProvider(1n, injectedProvider, async () => {
+			rpcRequested = true
+			return jsonResponse({ jsonrpc: '2.0', id: 1, result: '0x1' })
+		}), failure === 'unauthorized' ? /Unauthorized/u : /Switch the injected wallet to chain 1/u)
+		assert.equal(rpcRequested, false)
 	})
 
 	test('uses the configured mainnet RPC without exposing its path in the source label', async () => {

@@ -62,21 +62,15 @@ export type SafeReadProvider = {
 	readonly source: SafeInformationSource
 }
 
-async function injectedProviderMatchesChain(provider: InjectedProvider, chainId: bigint) {
-	try {
-		return BigInt(funtypes.String.parse(await provider.request({ method: 'eth_chainId' }))) === chainId
-	} catch {
-		return false
-	}
-}
-
 export async function getSafeReadProvider(
 	chainId: bigint,
 	injectedProvider: InjectedProvider | undefined,
 	fetchImplementation: FetchImplementation = globalThis.fetch,
 	ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL,
 ): Promise<SafeReadProvider> {
-	if (injectedProvider !== undefined && await injectedProviderMatchesChain(injectedProvider, chainId)) {
+	if (injectedProvider !== undefined) {
+		const walletChainId = BigInt(funtypes.String.parse(await injectedProvider.request({ method: 'eth_chainId' })))
+		if (walletChainId !== chainId) throw new Error(`Switch the injected wallet to chain ${ chainId.toString() } to read this Gnosis Safe’s current information.`)
 		return { provider: injectedProvider, source: { kind: 'injected' } }
 	}
 	if (chainId === 1n) {
@@ -85,8 +79,5 @@ export async function getSafeReadProvider(
 			source: { kind: 'rpc', host: getEthereumRpcHost(ethereumRpcUrl) },
 		}
 	}
-	if (injectedProvider === undefined) {
-		throw new Error(`No injected wallet is available to read Gnosis Safe information on chain ${ chainId.toString() }.`)
-	}
-	throw new Error(`Switch the injected wallet to chain ${ chainId.toString() } to read this Gnosis Safe’s current information.`)
+	throw new Error(`No injected wallet is available to read Gnosis Safe information on chain ${ chainId.toString() }.`)
 }
