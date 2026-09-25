@@ -100,21 +100,7 @@ async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTime
 		const key = chainId.toString()
 		const existing = providers.get(key)
 		if (existing !== undefined) return existing
-		const provider = getSafeReadProvider(chainId, injectedProvider, globalThis.fetch, ethereumRpcUrl).then(({ provider: readProvider, source }) => {
-			const primary = withWalletRequestTimeout(readProvider, walletRequestTimeoutMs)
-			return {
-				async request(request) {
-					try {
-						return await primary.request(request)
-					} catch (error) {
-						const unauthorized = typeof error === 'object' && error !== null && 'code' in error && (error.code === 4100 || error.code === '4100')
-						if (chainId !== 1n || source.kind !== 'injected' || request.method !== 'eth_call' || (!unauthorized && !/not been authorized|unauthorized/iu.test(getUserFacingErrorMessage(error)))) throw error
-						const fallback = await getSafeReadProvider(chainId, undefined, globalThis.fetch, ethereumRpcUrl)
-						return await withWalletRequestTimeout(fallback.provider, walletRequestTimeoutMs).request(request)
-					}
-				},
-			} satisfies InjectedProvider
-		})
+		const provider = getSafeReadProvider(chainId, injectedProvider, globalThis.fetch, ethereumRpcUrl).then(({ provider: readProvider }) => withWalletRequestTimeout(readProvider, walletRequestTimeoutMs))
 		providers.set(key, provider)
 		return provider
 	}

@@ -275,7 +275,7 @@ describe('Sealwort rendered UI', () => {
 		}
 	})
 
-	test('reads approval decimals from the configured mainnet RPC when the wallet is unauthorized', async () => {
+	for (const walletAvailable of [true, false]) test(`uses only the ${ walletAvailable ? 'wallet' : 'configured RPC' } for approval metadata`, async () => {
 		const stack = createStack()
 		const transaction = stack.transactions[0]!
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
@@ -289,6 +289,7 @@ describe('Sealwort rendered UI', () => {
 			if (method === 'eth_chainId') return '0x1'
 			throw { code: 4100, message: 'Unauthorized' }
 		} }
+		if (!walletAvailable) delete window.ethereum
 		const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
 			assert.equal(String(input), 'https://rpc.example.test')
 			const body = JSON.parse(String(init?.body))
@@ -297,8 +298,11 @@ describe('Sealwort rendered UI', () => {
 		}, { preconnect: globalThis.fetch.preconnect }))
 		try {
 			render(<Details />)
-			await screen.findByText('14411.275698 tokens')
-			assert.equal(fetchMock.mock.calls.length, 1)
+			if (walletAvailable) {
+				await screen.findByText('Unauthorized')
+				assert.notEqual(screen.getByText('14411275698 base units'), undefined)
+			} else await screen.findByText('14411.275698 tokens')
+			assert.equal(fetchMock.mock.calls.length, walletAvailable ? 0 : 1)
 		} finally {
 			fetchMock.mockRestore()
 			if (previousEthereum === undefined) delete window.ethereum
