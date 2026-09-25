@@ -29,17 +29,18 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 	const callValuePresentation = decoded.status === 'decoded' ? transactionValuePresentation(decoded.call) : undefined
 
 	const renderAmount = (value: bigint, reference: AmountTokenReference) => {
+		const unavailable = (message: string) => <><span>{ value.toString() } base units</span> <span class = 'data-parse-error'>{ message }</span></>
 		const address = resolveTokenAddress(reference, destination, metadata.status === 'ready' ? metadata.vaultAsset : undefined)
 		if (address === 'native') return formatTokenAmount(value, 18, getNativeAssetSymbol(chainId))
 		if (address === 'liquidity') return formatTokenAmount(value, 18, 'LP tokens')
-		if (metadata.status === 'failed') return <span class = 'data-parse-error'>{ metadata.message }</span>
+		if (metadata.status === 'failed') return unavailable(metadata.message)
 		if (metadata.status !== 'ready') return 'Reading token decimals…'
-		if (reference === 'vaultAsset' && metadata.vaultAssetError !== undefined) return <span class = 'data-parse-error'>{ metadata.vaultAssetError }</span>
-		if (address === undefined) return <span class = 'data-parse-error'>Token decimals unavailable.</span>
+		if (reference === 'vaultAsset' && metadata.vaultAssetError !== undefined) return unavailable(metadata.vaultAssetError)
+		if (address === undefined) return unavailable('Token decimals unavailable.')
 		const token = metadata.tokens[tokenMetadataKey(address)]
 		if (token?.status === 'available') return formatTokenAmount(value, token.decimals, getAddressLabel(address, chainId))
 		if (token?.status === 'nft') return value.toString()
-		return <span class = 'data-parse-error'>{ token?.message ?? 'Token decimals unavailable.' }</span>
+		return unavailable(token?.message ?? 'Token decimals unavailable.')
 	}
 	function renderValue(name: string, value: unknown, scope: Readonly<Record<string, unknown>>, key: string): ComponentChildren {
 		const address = decodedAddress(value)

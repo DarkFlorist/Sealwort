@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { isContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from './contractMetadata.js'
+import { DEFAULT_ETHEREUM_RPC_URL } from './rpcSettings.js'
 import { getSafeReadProvider } from './readProvider.js'
 import type { SafeStackExport } from './safeStackProtocol.js'
 import type { InjectedProvider } from './provider.js'
@@ -92,14 +93,28 @@ function initialMetadata(stackExport: SafeStackExport | undefined): TransactionD
 	}))
 }
 
-async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTimeoutMs: number | undefined): Promise<TransactionDataMetadata> {
+async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTimeoutMs: number | undefined, ethereumRpcUrl: string): Promise<TransactionDataMetadata> {
 	const injectedProvider = window.ethereum === undefined ? undefined : withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
 	const providers = new Map<string, Promise<InjectedProvider>>()
 	const providerForChain = (chainId: bigint) => {
 		const key = chainId.toString()
 		const existing = providers.get(key)
 		if (existing !== undefined) return existing
-		const provider = getSafeReadProvider(chainId, injectedProvider).then(({ provider: readProvider }) => withWalletRequestTimeout(readProvider, walletRequestTimeoutMs))
+		const provider = getSafeReadProvider(chainId, injectedProvider, globalThis.fetch, ethereumRpcUrl).then(({ provider: readProvider, source }) => {
+			const primary = withWalletRequestTimeout(readProvider, walletRequestTimeoutMs)
+			return {
+				async request(request) {
+					try {
+						return await primary.request(request)
+					} catch (error) {
+						const unauthorized = typeof error === 'object' && error !== null && 'code' in error && (error.code === 4100 || error.code === '4100')
+						if (chainId !== 1n || source.kind !== 'injected' || request.method !== 'eth_call' || (!unauthorized && !/not been authorized|unauthorized/iu.test(getUserFacingErrorMessage(error)))) throw error
+						const fallback = await getSafeReadProvider(chainId, undefined, globalThis.fetch, ethereumRpcUrl)
+						return await withWalletRequestTimeout(fallback.provider, walletRequestTimeoutMs).request(request)
+					}
+				},
+			} satisfies InjectedProvider
+		})
 		providers.set(key, provider)
 		return provider
 	}
@@ -113,15 +128,15 @@ async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTime
 	}))))
 }
 
-export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, walletRequestTimeoutMs?: number) {
-	const revision = stackMetadataRevision(stackExport)
+export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, walletRequestTimeoutMs?: number, refreshRevision = 0, ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL) {
+	const revision = JSON.stringify([stackMetadataRevision(stackExport), refreshRevision, ethereumRpcUrl])
 	const initial = initialMetadata(stackExport)
 	const state = useSignal<{ readonly revision: string, readonly metadata: TransactionDataMetadata }>({ revision, metadata: initial })
 
 	useEffect(() => {
 		let current = true
 		state.value = { revision, metadata: initial }
-		if (stackExport !== undefined) void loadStackMetadata(stackExport, walletRequestTimeoutMs).then((metadata) => {
+		if (stackExport !== undefined) void loadStackMetadata(stackExport, walletRequestTimeoutMs, ethereumRpcUrl).then((metadata) => {
 			if (current) state.value = { revision, metadata }
 		}, (metadataError: unknown) => {
 			if (!current) return
