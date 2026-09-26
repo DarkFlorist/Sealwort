@@ -105,7 +105,7 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('decodes both requested payment helper signatures', () => {
-		const contract = createContract(CUSTOM_PAYMENT_ABI)
+		const contract = createContract([CUSTOM_PAYMENT_ABI[0], CUSTOM_PAYMENT_ABI[2]] as const)
 		const tokenAddress = '0x0000000000000000000000000000000000001111'
 		const to = '0x0000000000000000000000000000000000002222'
 		const feeAddress = '0x0000000000000000000000000000000000003333'
@@ -118,6 +118,28 @@ describe('transaction calldata parsing', () => {
 		assert.equal(transactionNeedsErc721Resolution(safeTransfer), true)
 		const resolved = resolveTransactionInterpretation(safeTransfer, false)
 		assert.equal(resolved.status === 'decoded' && Object.hasOwn(resolved.call.arguments ?? {}, '_tokenAddress'), true)
+	})
+
+	test('decodes the eight-parameter payment overload with selector 0x3af2c012', () => {
+		const signature = 'transferFromWithReferenceAndFee(address,uint256,address[],bytes,uint256,address,uint256,uint256)'
+		const args = {
+			_to: secondAddress,
+			_requestAmount: 100n,
+			_path: [firstAddress, secondAddress],
+			_paymentReference: new Uint8Array([1, 2, 3]),
+			_feeAmount: 2n,
+			_feeAddress: firstAddress,
+			_maxToSpend: 150n,
+			_maxRateTimespan: 3600n,
+		}
+		const data = createContract([CUSTOM_PAYMENT_ABI[1]] as const).transferFromWithReferenceAndFee.encodeInput(args)
+		assert.equal(Buffer.from(data.subarray(0, 4)).toString('hex'), '3af2c012')
+		const decoded = decodeTransactionData(1n, destination, data)
+		assert.equal(decoded.status, 'decoded')
+		if (decoded.status !== 'decoded') return
+		assert.equal(decoded.call.signature, signature)
+		assert.deepEqual(decoded.call.arguments, args)
+		assert.deepEqual(amountTokenReferences(decoded.call), [])
 	})
 
 	test('resolves the shared safeTransferFrom selector without depending on ABI order', () => {
