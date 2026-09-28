@@ -154,6 +154,25 @@ describe('transaction calldata parsing', () => {
 		assert.equal(amountTokenForArgument(decoded.call, '_maxRateTimespan', scope), undefined)
 	})
 
+	test('resolves only the path argument named by the conversion payment rule', () => {
+		const [signature] = abiFunctionSignatures(CONVERSION_PAYMENT_ABI)
+		assert.ok(signature !== undefined)
+		const args = {
+			_requestAmount: 100n, _feeAmount: 2n, _maxToSpend: 150n,
+			_path: [firstAddress, secondAddress],
+			path: [secondAddress, firstAddress],
+		}
+		const call = { name: 'transferFromWithReferenceAndFee', signature, arguments: args }
+		assert.equal(amountTokenForArgument(call, '_requestAmount', args), BigInt(firstAddress))
+		assert.equal(amountTokenForArgument(call, '_feeAmount', args), BigInt(firstAddress))
+		assert.equal(amountTokenForArgument(call, '_maxToSpend', args), BigInt(secondAddress))
+		for (const value of [undefined, [], ['invalid-address']]) {
+			const scope = { ...args, _path: value }
+			const invalid = { ...call, arguments: scope }
+			assert.deepEqual(amountTokenReferences(invalid), [])
+		}
+	})
+
 	test('resolves the shared safeTransferFrom selector without depending on ABI order', () => {
 		const erc721 = createContract(ERC721) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
 		const data = erc721['safeTransferFrom(address,address,uint256)']!.encodeInput({ from: firstAddress, to: secondAddress, tokenId: 42n })

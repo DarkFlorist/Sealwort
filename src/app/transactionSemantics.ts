@@ -37,8 +37,7 @@ function fieldToken(scope: Readonly<Record<string, unknown>>, name: string) {
 	return address === NATIVE_TOKEN_SENTINEL ? 'native' as const : address
 }
 
-function pathToken(scope: Readonly<Record<string, unknown>>, end: 'first' | 'last') {
-	const value = scope.path ?? scope._path
+function pathToken(value: unknown, end: 'first' | 'last') {
 	if (Array.isArray(value)) return decodedAddress(value[end === 'first' ? 0 : value.length - 1])
 	if (!(value instanceof Uint8Array) || value.length < 43 || (value.length - 20) % 23 !== 0) return undefined
 	const offset = end === 'first' ? 0 : value.length - 20
@@ -52,7 +51,7 @@ function rulesForScope(call: DecodedTransactionData, scope: Readonly<Record<stri
 
 function resolveSource(source: TokenSource, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {
 	if (typeof source === 'bigint' || typeof source === 'string') return source
-	return 'field' in source ? fieldToken(scope, source.field) : pathToken(scope, source.path)
+	return 'field' in source ? fieldToken(scope, source.field) : pathToken(scope[source.path.field], source.path.end)
 }
 
 export function amountTokenForArgument(call: DecodedTransactionData, argumentName: string, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {
