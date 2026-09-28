@@ -31,8 +31,13 @@ export function decodedAddress(value: unknown) {
 	return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/u.test(value) ? BigInt(value) : undefined
 }
 
+// Rules use unprefixed argument names; prefer that spelling when both forms exist.
+function sourceArgument(scope: Readonly<Record<string, unknown>>, name: string) {
+	return scope[name] ?? scope[`_${ name }`]
+}
+
 function fieldToken(scope: Readonly<Record<string, unknown>>, name: string) {
-	const address = decodedAddress(scope[name] ?? scope[`_${ name }`])
+	const address = decodedAddress(sourceArgument(scope, name))
 	if (address === undefined) return undefined
 	return address === NATIVE_TOKEN_SENTINEL ? 'native' as const : address
 }
@@ -51,7 +56,7 @@ function rulesForScope(call: DecodedTransactionData, scope: Readonly<Record<stri
 
 function resolveSource(source: TokenSource, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {
 	if (typeof source === 'bigint' || typeof source === 'string') return source
-	return 'field' in source ? fieldToken(scope, source.field) : pathToken(scope[source.path.field], source.path.end)
+	return 'field' in source ? fieldToken(scope, source.field) : pathToken(sourceArgument(scope, source.path.field), source.path.end)
 }
 
 export function amountTokenForArgument(call: DecodedTransactionData, argumentName: string, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {

@@ -154,22 +154,28 @@ describe('transaction calldata parsing', () => {
 		assert.equal(amountTokenForArgument(decoded.call, '_maxRateTimespan', scope), undefined)
 	})
 
-	test('resolves only the path argument named by the conversion payment rule', () => {
-		const [signature] = abiFunctionSignatures(CONVERSION_PAYMENT_ABI)
-		assert.ok(signature !== undefined)
-		const args = {
-			_requestAmount: 100n, _feeAmount: 2n, _maxToSpend: 150n,
-			_path: [firstAddress, secondAddress],
-			path: [secondAddress, firstAddress],
+	test('uses the same underscore fallback and precedence for field and path sources', () => {
+		const [conversionSignature] = abiFunctionSignatures(CONVERSION_PAYMENT_ABI)
+		const [directSignature] = abiFunctionSignatures(DIRECT_PAYMENT_ABI)
+		assert.ok(conversionSignature !== undefined && directSignature !== undefined)
+		for (const plain of [undefined, null, firstAddress]) {
+			const fieldScope = { _amount: 100n, tokenAddress: plain, _tokenAddress: secondAddress }
+			const fieldCall = { name: 'transferFromWithReferenceAndFee', signature: directSignature, arguments: fieldScope }
+			const pathScope = { _requestAmount: 100n, _feeAmount: 2n, _maxToSpend: 150n,
+				path: plain == null ? plain : [firstAddress, secondAddress], _path: [secondAddress, firstAddress] }
+			const pathCall = { name: 'transferFromWithReferenceAndFee', signature: conversionSignature, arguments: pathScope }
+			const first = BigInt(plain ?? secondAddress)
+			const last = BigInt(plain == null ? firstAddress : secondAddress)
+			assert.equal(amountTokenForArgument(fieldCall, '_amount', fieldScope), first)
+			assert.equal(amountTokenForArgument(pathCall, '_requestAmount', pathScope), first)
+			assert.equal(amountTokenForArgument(pathCall, '_feeAmount', pathScope), first)
+			assert.equal(amountTokenForArgument(pathCall, '_maxToSpend', pathScope), last)
 		}
-		const call = { name: 'transferFromWithReferenceAndFee', signature, arguments: args }
-		assert.equal(amountTokenForArgument(call, '_requestAmount', args), BigInt(firstAddress))
-		assert.equal(amountTokenForArgument(call, '_feeAmount', args), BigInt(firstAddress))
-		assert.equal(amountTokenForArgument(call, '_maxToSpend', args), BigInt(secondAddress))
-		for (const value of [undefined, [], ['invalid-address']]) {
-			const scope = { ...args, _path: value }
-			const invalid = { ...call, arguments: scope }
-			assert.deepEqual(amountTokenReferences(invalid), [])
+		// A present but invalid value must not silently select a different argument.
+		for (const value of [[], ['invalid-address']]) {
+			const scope = { _requestAmount: 100n, path: value, _path: [firstAddress, secondAddress] }
+			const call = { name: 'transferFromWithReferenceAndFee', signature: conversionSignature, arguments: scope }
+			assert.deepEqual(amountTokenReferences(call), [])
 		}
 	})
 

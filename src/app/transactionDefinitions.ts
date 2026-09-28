@@ -10,6 +10,7 @@ import { UNISWAP_V3_ROUTER_ABI } from './abis/uniswapV3Router.js'
 import { ETHEREUM_MAINNET_CHAIN_ID, getRegisteredTransactionContracts, type RegisteredTransactionContract } from './addressRegistry.js'
 
 export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
+// Field names omit a leading underscore; both field and path sources resolve the ABI spelling.
 export type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: { readonly field: string, readonly end: 'first' | 'last' } }
 export type AmountRules = Readonly<Record<string, TokenSource>>
 export type FunctionRule = {
@@ -93,7 +94,7 @@ export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 	{ abi: CONVERSION_PAYMENT_ABI, functions: [
 		// Erc20ConversionProxy converts requestAmount/feeAmount from _path[0], then caps their converted sum in the last currency.
 		// https://github.com/RequestNetwork/requestNetwork/blob/e7a48e42d55d96f6dbc947895e0677df28942736/packages/smart-contracts/src/contracts/Erc20ConversionProxy.sol#L67-L98
-		functionRule(['transferFromWithReferenceAndFee'], { requestAmount: path('_path', 'first'), feeAmount: path('_path', 'first'), maxToSpend: path('_path', 'last') }),
+		functionRule(['transferFromWithReferenceAndFee'], { requestAmount: path('path', 'first'), feeAmount: path('path', 'first'), maxToSpend: path('path', 'last') }),
 	] },
 	{ abi: PAYMENT_SAFE_TRANSFER_ABI, functions: [
 		{ names: ['safeTransferFrom'], rule: { amounts: { amount: field('tokenAddress') }, ambiguity: { erc721Arguments: ['from', 'to', 'tokenId'], fallbackArguments: ['_tokenAddress', '_to', '_amount'] } } },
