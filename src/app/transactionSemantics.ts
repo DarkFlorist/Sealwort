@@ -7,7 +7,7 @@ import { TRANSACTION_DEFINITIONS, type AmountTokenReference, type FunctionRule, 
 export type { AmountTokenReference } from './transactionDefinitions.js'
 
 const FUNCTION_RULES: Readonly<Record<string, FunctionRule>> = Object.fromEntries(TRANSACTION_DEFINITIONS.flatMap((definition) =>
-	(definition.functions ?? []).flatMap(({ names, rule }) => abiFunctionSignatures(definition.abi, names).map((signature) => [signature, rule] as const)),
+	(definition.functions ?? []).flatMap(({ names, signatures, rule }) => (signatures ?? abiFunctionSignatures(definition.abi, names)).map((signature) => [signature, rule] as const)),
 ))
 
 const ARGUMENT_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
@@ -38,7 +38,7 @@ function fieldToken(scope: Readonly<Record<string, unknown>>, name: string) {
 }
 
 function pathToken(scope: Readonly<Record<string, unknown>>, end: 'first' | 'last') {
-	const value = scope.path
+	const value = scope.path ?? scope._path
 	if (Array.isArray(value)) return decodedAddress(value[end === 'first' ? 0 : value.length - 1])
 	if (!(value instanceof Uint8Array) || value.length < 43 || (value.length - 20) % 23 !== 0) return undefined
 	const offset = end === 'first' ? 0 : value.length - 20

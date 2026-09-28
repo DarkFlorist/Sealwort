@@ -20,7 +20,10 @@ export type FunctionRule = {
 	}
 	readonly transactionValue?: { readonly label: string, readonly decimals: number, readonly token: 'destination', readonly fallbackSymbol: string }
 }
-export type FunctionRuleDefinition = { readonly names: readonly string[], readonly rule: FunctionRule }
+export type FunctionRuleDefinition = { readonly rule: FunctionRule } & (
+	{ readonly names: readonly string[], readonly signatures?: never }
+	| { readonly signatures: readonly string[], readonly names?: never }
+)
 export type TransactionDefinition = {
 	readonly abi: ContractABI
 	readonly functions?: readonly FunctionRuleDefinition[]
@@ -88,7 +91,9 @@ export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 	{ abi: ERC4626_ABI, functions: [functionRule(['deposit', 'withdraw'], { assets: 'vaultAsset' }), functionRule(['mint', 'redeem'], { shares: 'destination' })] },
 	{ abi: ERC7540_ABI, functions: [functionRule(['deposit', 'withdraw', 'requestDeposit'], { assets: 'vaultAsset' }), functionRule(['mint', 'redeem', 'requestRedeem'], { shares: 'destination' })] },
 	{ abi: CUSTOM_PAYMENT_ABI, functions: [
-		functionRule(['transferFromWithReferenceAndFee'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') }),
+		{ signatures: ['transferFromWithReferenceAndFee(address,address,uint256,bytes,uint256,address)'], rule: { amounts: { amount: field('tokenAddress'), feeAmount: field('tokenAddress') } } },
+		// Conversion starts in the request currency and ends in the payment token.
+		{ signatures: ['transferFromWithReferenceAndFee(address,uint256,address[],bytes,uint256,address,uint256,uint256)'], rule: { amounts: { requestAmount: path('first'), feeAmount: path('first'), maxToSpend: path('last') } } },
 		{ names: ['safeTransferFrom'], rule: { amounts: { amount: field('tokenAddress') }, ambiguity: { erc721Arguments: ['from', 'to', 'tokenId'], fallbackArguments: ['_tokenAddress', '_to', '_amount'] } } },
 	] },
 	...MAINNET_TRANSACTION_DEFINITIONS,
