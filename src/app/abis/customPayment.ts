@@ -35,5 +35,3 @@ export const PAYMENT_SAFE_TRANSFER_ABI = [{
 		{ name: '_amount', type: 'uint256' },
 	],
 }] as const
-
-export const CUSTOM_PAYMENT_ABI = [...DIRECT_PAYMENT_ABI, ...CONVERSION_PAYMENT_ABI, ...PAYMENT_SAFE_TRANSFER_ABI] as const

@@ -91,7 +91,8 @@ export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 		functionRule(['transferFromWithReferenceAndFee'], { amount: field('tokenAddress'), feeAmount: field('tokenAddress') }),
 	] },
 	{ abi: CONVERSION_PAYMENT_ABI, functions: [
-		// Conversion starts in the request currency and ends in the payment token.
+		// Erc20ConversionProxy converts requestAmount/feeAmount from _path[0], then caps their converted sum in the last currency.
+		// https://github.com/RequestNetwork/requestNetwork/blob/e7a48e42d55d96f6dbc947895e0677df28942736/packages/smart-contracts/src/contracts/Erc20ConversionProxy.sol#L67-L98
 		functionRule(['transferFromWithReferenceAndFee'], { requestAmount: path('first'), feeAmount: path('first'), maxToSpend: path('last') }),
 	] },
 	{ abi: PAYMENT_SAFE_TRANSFER_ABI, functions: [
