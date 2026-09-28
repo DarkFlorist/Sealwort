@@ -316,6 +316,39 @@ describe('Sealwort rendered UI', () => {
 		}
 	})
 
+	for (const providerFailure of ['wrong-chain', 'unauthorized'] as const) test(`metadata retry exposes a new ${ providerFailure } error instead of the cached lookup error`, async () => {
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 1n })
+		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
+		function Details({ revision }: { revision: number }) {
+			const result = useTransactionDataMetadata(stackExport, { retryRevision: revision })[0]![0]!
+			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } />
+		}
+		const previousEthereum = window.ethereum
+		let retry = false
+		window.ethereum = { request: async ({ method }) => {
+			if (method === 'eth_chainId') {
+				if (retry && providerFailure === 'unauthorized') throw new Error('Wallet authorization expired.')
+				return retry ? '0x1' : '0xaa36a7'
+			}
+			throw new Error('Original token lookup failed.')
+		} }
+		try {
+			const view = render(<Details revision = { 0 } />)
+			await screen.findByText('Original token lookup failed.')
+			retry = true
+			view.rerender(<Details revision = { 1 } />)
+			const message = providerFailure === 'wrong-chain' ? 'Switch the injected wallet to chain 11155111 to read this Gnosis Safe’s current information.' : 'Wallet authorization expired.'
+			await screen.findAllByText(message)
+			assert.equal(screen.queryByText('Original token lookup failed.'), null)
+			assert.notEqual(screen.getByText('1 base units'), undefined)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
 	for (const walletAvailable of [true, false]) test(`uses only the ${ walletAvailable ? 'wallet' : 'configured RPC' } for approval metadata`, async () => {
 		const stack = createStack()
 		const transaction = stack.transactions[0]!

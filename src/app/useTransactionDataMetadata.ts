@@ -31,14 +31,14 @@ function needsProvider(decoded: TransactionDataDecodeResult) {
 		|| amountTokenReferences(decoded.call).some((reference) => reference !== 'native' && reference !== 'liquidity'))
 }
 
-async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destination: bigint, provider: InjectedProvider, previous?: TransactionDataMetadataResult): Promise<TransactionDataMetadataResult> {
+async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destination: bigint, getProvider: () => Promise<InjectedProvider>, previous?: TransactionDataMetadataResult): Promise<TransactionDataMetadataResult> {
 	if (initialDecoded.status !== 'decoded') return { decoded: initialDecoded, metadata: { status: 'idle' } }
 	const cached = previous?.metadata.status === 'ready' ? previous : undefined
 	let decoded = cached?.decoded.status === 'decoded' ? cached.decoded : initialDecoded
 	let references = amountTokenReferences(decoded.call)
 
 	if (transactionNeedsErc721Resolution(decoded)) {
-		const interfaceResult = await settle(readIsErc721(provider, destination))
+		const interfaceResult = await settle(readIsErc721(await getProvider(), destination))
 		const resolved = resolveTransactionInterpretation(decoded, interfaceResult.status === 'fulfilled' && interfaceResult.value)
 		if (resolved.status !== 'decoded') throw new Error('Resolved transaction data unexpectedly became unavailable.')
 		decoded = resolved
@@ -51,7 +51,7 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 	let vaultAsset = cached?.metadata.status === 'ready' ? cached.metadata.vaultAsset : undefined
 	let vaultAssetError: string | undefined
 	if (references.includes('vaultAsset') && vaultAsset === undefined) {
-		const assetResult = await settle(readVaultAsset(provider, destination))
+		const assetResult = await settle(readVaultAsset(await getProvider(), destination))
 		if (assetResult.status === 'fulfilled') vaultAsset = assetResult.value
 		else vaultAssetError = isContractMetadataUnavailableError(assetResult.reason)
 			? 'Could not read this vault’s asset.'
@@ -66,12 +66,12 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 	const entries = await Promise.all(addresses.map(async (address) => {
 		const token = cached?.metadata.status === 'ready' ? cached.metadata.tokens[tokenMetadataKey(address)] : undefined
 		if (token !== undefined && token.status !== 'error') return [tokenMetadataKey(address), token] as const
-		const decimalsResult = await settle(readTokenDecimals(provider, address))
+		const decimalsResult = await settle(readTokenDecimals(await getProvider(), address))
 		if (decimalsResult.status === 'fulfilled') return [tokenMetadataKey(address), { status: 'available', decimals: decimalsResult.value } satisfies TokenMetadataState] as const
 		if (!isContractMetadataUnavailableError(decimalsResult.reason)) {
 			return [tokenMetadataKey(address), { status: 'error', message: getUserFacingErrorMessage(decimalsResult.reason) } satisfies TokenMetadataState] as const
 		}
-		const nftResult = await settle(readIsErc721(provider, address))
+		const nftResult = await settle(readIsErc721(await getProvider(), address))
 		if (nftResult.status === 'fulfilled' && nftResult.value) return [tokenMetadataKey(address), { status: 'nft' } satisfies TokenMetadataState] as const
 		if (nftResult.status === 'rejected' && !isContractMetadataUnavailableError(nftResult.reason)) {
 			return [tokenMetadataKey(address), { status: 'error', message: getUserFacingErrorMessage(nftResult.reason) } satisfies TokenMetadataState] as const
@@ -109,12 +109,11 @@ async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTime
 	}
 	return await Promise.all(stackExport.stacks.map(async (stack, stackIndex) => await Promise.all(stack.transactions.map(async (transaction, transactionIndex) => {
 		const cached = previous[stackIndex]?.[transactionIndex]
-		if (cached?.metadata.status === 'ready' && cached.metadata.vaultAssetError === undefined && Object.values(cached.metadata.tokens).every((token) => token.status !== 'error')) return cached
 		const decoded = decodeTransactionData(stack.chainId, transaction.safeTx.message.to, transaction.safeTx.message.data)
 		if (!needsProvider(decoded)) return { decoded, metadata: { status: 'idle' } } as const
-		return await providerForChain(stack.chainId).then((provider) => loadMetadata(decoded, transaction.safeTx.message.to, provider, cached)).then(
+		return await loadMetadata(decoded, transaction.safeTx.message.to, () => providerForChain(stack.chainId), cached).then(
 			(result) => result,
-			(metadataError: unknown) => cached?.metadata.status === 'ready' ? cached : ({ decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }) as const,
+			(metadataError: unknown) => ({ decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }) as const,
 		)
 	}))))
 }

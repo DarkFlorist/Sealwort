@@ -84,6 +84,8 @@ export function App({
 	const importTextarea = useRef<HTMLTextAreaElement>(null)
 	const updatedStackTextarea = useRef<HTMLTextAreaElement>(null)
 	const stackRevision = useSignal(0)
+	// Explicit metadata retries are independent of stack-operation cancellation revisions.
+	// Imports invalidate metadata through calldata changes, not this signal.
 	const metadataRetryRevision = useSignal(0)
 	const { information: safeInformation, refresh: refreshSafeInformation } = useSafeInformation(stackRevision, stackExport, ethereumRpcUrl, walletRequestTimeoutMs)
 	const signedStackJson = useSignal<string | undefined>(undefined)
