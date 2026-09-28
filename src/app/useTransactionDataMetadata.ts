@@ -31,9 +31,10 @@ function needsProvider(decoded: TransactionDataDecodeResult) {
 		|| amountTokenReferences(decoded.call).some((reference) => reference !== 'native' && reference !== 'liquidity'))
 }
 
-async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destination: bigint, provider: InjectedProvider): Promise<TransactionDataMetadataResult> {
+async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destination: bigint, provider: InjectedProvider, previous?: TransactionDataMetadataResult): Promise<TransactionDataMetadataResult> {
 	if (initialDecoded.status !== 'decoded') return { decoded: initialDecoded, metadata: { status: 'idle' } }
-	let decoded = initialDecoded
+	const cached = previous?.metadata.status === 'ready' ? previous : undefined
+	let decoded = cached?.decoded.status === 'decoded' ? cached.decoded : initialDecoded
 	let references = amountTokenReferences(decoded.call)
 
 	if (transactionNeedsErc721Resolution(decoded)) {
@@ -47,9 +48,9 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 		references = amountTokenReferences(decoded.call)
 	}
 
-	let vaultAsset: bigint | undefined
+	let vaultAsset = cached?.metadata.status === 'ready' ? cached.metadata.vaultAsset : undefined
 	let vaultAssetError: string | undefined
-	if (references.includes('vaultAsset')) {
+	if (references.includes('vaultAsset') && vaultAsset === undefined) {
 		const assetResult = await settle(readVaultAsset(provider, destination))
 		if (assetResult.status === 'fulfilled') vaultAsset = assetResult.value
 		else vaultAssetError = isContractMetadataUnavailableError(assetResult.reason)
@@ -63,6 +64,8 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 		return [reference]
 	}).filter((address, index, all) => all.indexOf(address) === index)
 	const entries = await Promise.all(addresses.map(async (address) => {
+		const token = cached?.metadata.status === 'ready' ? cached.metadata.tokens[tokenMetadataKey(address)] : undefined
+		if (token !== undefined && token.status !== 'error') return [tokenMetadataKey(address), token] as const
 		const decimalsResult = await settle(readTokenDecimals(provider, address))
 		if (decimalsResult.status === 'fulfilled') return [tokenMetadataKey(address), { status: 'available', decimals: decimalsResult.value } satisfies TokenMetadataState] as const
 		if (!isContractMetadataUnavailableError(decimalsResult.reason)) {
@@ -93,7 +96,7 @@ function initialMetadata(stackExport: SafeStackExport | undefined): TransactionD
 	}))
 }
 
-async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTimeoutMs: number | undefined, ethereumRpcUrl: string): Promise<TransactionDataMetadata> {
+async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTimeoutMs: number | undefined, ethereumRpcUrl: string, previous: TransactionDataMetadata): Promise<TransactionDataMetadata> {
 	const injectedProvider = window.ethereum === undefined ? undefined : withWalletRequestTimeout(window.ethereum, walletRequestTimeoutMs)
 	const providers = new Map<string, Promise<InjectedProvider>>()
 	const providerForChain = (chainId: bigint) => {
@@ -104,25 +107,36 @@ async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTime
 		providers.set(key, provider)
 		return provider
 	}
-	return await Promise.all(stackExport.stacks.map(async (stack) => await Promise.all(stack.transactions.map(async (transaction) => {
+	return await Promise.all(stackExport.stacks.map(async (stack, stackIndex) => await Promise.all(stack.transactions.map(async (transaction, transactionIndex) => {
+		const cached = previous[stackIndex]?.[transactionIndex]
+		if (cached?.metadata.status === 'ready' && cached.metadata.vaultAssetError === undefined && Object.values(cached.metadata.tokens).every((token) => token.status !== 'error')) return cached
 		const decoded = decodeTransactionData(stack.chainId, transaction.safeTx.message.to, transaction.safeTx.message.data)
 		if (!needsProvider(decoded)) return { decoded, metadata: { status: 'idle' } } as const
-		return await providerForChain(stack.chainId).then((provider) => loadMetadata(decoded, transaction.safeTx.message.to, provider)).then(
+		return await providerForChain(stack.chainId).then((provider) => loadMetadata(decoded, transaction.safeTx.message.to, provider, cached)).then(
 			(result) => result,
-			(metadataError: unknown) => ({ decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }) as const,
+			(metadataError: unknown) => cached?.metadata.status === 'ready' ? cached : ({ decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }) as const,
 		)
 	}))))
 }
 
-export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, walletRequestTimeoutMs?: number, refreshRevision = 0, ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL) {
-	const revision = JSON.stringify([stackMetadataRevision(stackExport), refreshRevision, ethereumRpcUrl])
+type TransactionDataMetadataOptions = {
+	readonly walletRequestTimeoutMs?: number | undefined
+	/** Retry failed reads without invalidating successful metadata for unchanged calldata. */
+	readonly retryRevision?: number
+	readonly ethereumRpcUrl?: string
+}
+
+export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, { walletRequestTimeoutMs, retryRevision = 0, ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL }: TransactionDataMetadataOptions = {}) {
+	const revision = stackMetadataRevision(stackExport)
 	const initial = initialMetadata(stackExport)
 	const state = useSignal<{ readonly revision: string, readonly metadata: TransactionDataMetadata }>({ revision, metadata: initial })
 
 	useEffect(() => {
 		let current = true
-		state.value = { revision, metadata: initial }
-		if (stackExport !== undefined) void loadStackMetadata(stackExport, walletRequestTimeoutMs, ethereumRpcUrl).then((metadata) => {
+		const previous = state.peek()
+		const retained = previous.revision === revision ? previous.metadata : initial
+		state.value = { revision, metadata: retained }
+		if (stackExport !== undefined) void loadStackMetadata(stackExport, walletRequestTimeoutMs, ethereumRpcUrl, retained).then((metadata) => {
 			if (current) state.value = { revision, metadata }
 		}, (metadataError: unknown) => {
 			if (!current) return
@@ -130,7 +144,7 @@ export function useTransactionDataMetadata(stackExport: SafeStackExport | undefi
 			state.value = { revision, metadata: initial.map((stack) => stack.map((result) => ({ decoded: result.decoded, metadata: { status: 'failed', message } }))) }
 		})
 		return () => { current = false }
-	}, [revision, walletRequestTimeoutMs])
+	}, [revision, retryRevision, ethereumRpcUrl, walletRequestTimeoutMs])
 
 	return state.value.revision === revision ? state.value.metadata : initial
 }

@@ -1,6 +1,6 @@
 import * as assert from 'node:assert'
 import { afterEach, describe, test, spyOn } from 'bun:test'
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact'
 import { createRef } from 'preact'
 import { createSafeTx, getSafeTxHash } from '../src/app/safeProtocol.js'
 import { SAFE_STACK_EXPORT_NAME, SAFE_STACK_FORMAT_VERSION, type SafeStackExport, type SafeTransactionStack } from '../src/app/safeStackProtocol.js'
@@ -54,7 +54,7 @@ type RenderStackOverrides = Partial<Omit<SafeStackPanelProps, 'transactionDataMe
 
 function SafeStackPanelWithMetadata({ walletRequestTimeoutMs, transactionDataMetadataOverride, ...props }: Omit<SafeStackPanelProps, 'transactionDataMetadata'> & { readonly walletRequestTimeoutMs: number | undefined, readonly transactionDataMetadataOverride: SafeStackPanelProps['transactionDataMetadata'] | undefined }) {
 	const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [props.stack] }
-	const transactionDataMetadata = useTransactionDataMetadata(stackExport, walletRequestTimeoutMs)
+	const transactionDataMetadata = useTransactionDataMetadata(stackExport, { walletRequestTimeoutMs })
 	return <SafeStackPanel { ...props } transactionDataMetadata = { transactionDataMetadataOverride ?? transactionDataMetadata[0] ?? [] } />
 }
 
@@ -252,7 +252,7 @@ describe('Sealwort rendered UI', () => {
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
 		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
 		function Details({ revision }: { revision: number }) {
-			const result = useTransactionDataMetadata(stackExport, undefined, revision)[0]![0]!
+			const result = useTransactionDataMetadata(stackExport, { retryRevision: revision })[0]![0]!
 			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } />
 		}
 		const previousEthereum = window.ethereum
@@ -275,13 +275,54 @@ describe('Sealwort rendered UI', () => {
 		}
 	})
 
+	for (const multiToken of [false, true]) test(`refresh retains successful metadata across ${ multiToken ? 'tokens in one transaction' : 'transactions' }`, async () => {
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const approval = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 1n })
+		const router = createContract(UNISWAP_V2_ROUTER_ABI) as unknown as Record<string, { encodeInput(value: unknown): Uint8Array }>
+		const data = multiToken ? router.swapExactTokensForTokens!.encodeInput({ amountIn: 1n, amountOutMin: 1n, path: ['0x0000000000000000000000000000000000000001', '0x0000000000000000000000000000000000000002'], to: '0x0000000000000000000000000000000000005678', deadline: 1n }) : approval
+		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{
+			...stack, chainId: 1n,
+			transactions: (multiToken ? [MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address] : [1n, 2n]).map((to) => ({ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to, data } } })),
+		}] }
+		function Details({ revision }: { revision: number }) {
+			const results = useTransactionDataMetadata(stackExport, { retryRevision: revision })
+			return <div>{ results[0]?.map(({ metadata }) => metadata.status === 'ready' ? Object.values(metadata.tokens).map((token) => token.status).join(',') : metadata.status).join(';') }</div>
+		}
+		const previousEthereum = window.ethereum
+		const calls: string[] = []
+		let authorized = false
+		window.ethereum = { request: async ({ method, params }) => {
+			if (method === 'eth_chainId') return '0x1'
+			const to = (params as readonly { to: string }[])[0]!.to
+			calls.push(to)
+			if (BigInt(to) === 2n && !authorized) throw new Error('Unauthorized')
+			return `0x${ '0'.repeat(63) }6`
+		} }
+		try {
+			const view = render(<Details revision = { 0 } />)
+			await screen.findByText(multiToken ? 'available,error' : 'available;error')
+			assert.equal(calls.length, 2)
+			authorized = true
+			view.rerender(<Details revision = { 1 } />)
+			await screen.findByText(multiToken ? 'available,available' : 'available;available')
+			assert.deepEqual(calls.map(BigInt), [1n, 2n, 2n])
+			view.rerender(<Details revision = { 2 } />)
+			await waitFor(() => assert.equal(screen.getByText(multiToken ? 'available,available' : 'available;available').textContent, multiToken ? 'available,available' : 'available;available'))
+			assert.equal(calls.length, 3)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
+	})
+
 	for (const walletAvailable of [true, false]) test(`uses only the ${ walletAvailable ? 'wallet' : 'configured RPC' } for approval metadata`, async () => {
 		const stack = createStack()
 		const transaction = stack.transactions[0]!
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
 		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
 		function Details() {
-			const result = useTransactionDataMetadata(stackExport, undefined, 0, 'https://rpc.example.test')[0]![0]!
+			const result = useTransactionDataMetadata(stackExport, { ethereumRpcUrl: 'https://rpc.example.test' })[0]![0]!
 			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { 1n } connectedAccount = { undefined } result = { result } />
 		}
 		const previousEthereum = window.ethereum

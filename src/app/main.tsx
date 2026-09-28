@@ -436,7 +436,7 @@ export function App({
 		if (loadedStack !== undefined) runBackgroundTask(refreshSafeInformation(loadedStack, stackRevision.peek()), reportUnexpectedFailure)
 		return persisted
 	}
-	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, walletRequestTimeoutMs, stackRevision.value, ethereumRpcUrl.value)
+	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, { walletRequestTimeoutMs, retryRevision: stackRevision.value, ethereumRpcUrl: ethereumRpcUrl.value })
 
 	return <main class = 'shell' aria-busy = { busy || loadingApplicationData }>
 		<header class = 'hero'>
