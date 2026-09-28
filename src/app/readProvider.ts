@@ -1,4 +1,3 @@
-import * as funtypes from 'funtypes'
 import type { InjectedProvider, ProviderRequest } from './provider.js'
 import { DEFAULT_ETHEREUM_RPC_URL, getEthereumRpcHost } from './rpcSettings.js'
 
@@ -69,7 +68,11 @@ export async function getSafeReadProvider(
 	ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL,
 ): Promise<SafeReadProvider> {
 	if (injectedProvider !== undefined) {
-		const walletChainId = BigInt(funtypes.String.parse(await injectedProvider.request({ method: 'eth_chainId' })))
+		const response = await injectedProvider.request({ method: 'eth_chainId' })
+		if (typeof response !== 'string' || !/^0x(?:0|[1-9a-f][0-9a-f]*)$/iu.test(response)) {
+			throw new Error('The wallet returned an invalid chain ID. Reconnect the wallet and try again.')
+		}
+		const walletChainId = BigInt(response)
 		if (walletChainId !== chainId) throw new Error(`Switch the injected wallet to chain ${ chainId.toString() } to read this Gnosis Safe’s current information.`)
 		return { provider: injectedProvider, source: { kind: 'injected' } }
 	}

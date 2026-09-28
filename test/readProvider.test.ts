@@ -67,6 +67,19 @@ describe('Safe information read provider', () => {
 		assert.equal(rpcRequested, false)
 	})
 
+	for (const response of [undefined, null, 1, {}, '0x', 'invalid', '', '1', '0x01', '-0x1', '0x1.2']) {
+		test(`reports actionable guidance for malformed wallet chain ID ${ JSON.stringify(response) }`, async () => {
+			let rpcRequested = false
+			await assert.rejects(getSafeReadProvider(1n, {
+				async request() { return response },
+			}, async () => {
+				rpcRequested = true
+				return jsonResponse({ jsonrpc: '2.0', id: 1, result: '0x1' })
+			}), { message: 'The wallet returned an invalid chain ID. Reconnect the wallet and try again.' })
+			assert.equal(rpcRequested, false)
+		})
+	}
+
 	test('uses the configured mainnet RPC without exposing its path in the source label', async () => {
 		const requests: string[] = []
 		const selected = await getSafeReadProvider(1n, undefined, async (input) => {
