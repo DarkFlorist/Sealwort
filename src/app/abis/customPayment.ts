@@ -1,4 +1,4 @@
-export const CUSTOM_PAYMENT_ABI = [{
+export const DIRECT_PAYMENT_ABI = [{
 	type: 'function',
 	name: 'transferFromWithReferenceAndFee',
 	inputs: [
@@ -9,7 +9,9 @@ export const CUSTOM_PAYMENT_ABI = [{
 		{ name: '_feeAmount', type: 'uint256' },
 		{ name: '_feeAddress', type: 'address' },
 	],
-}, {
+}] as const
+
+export const CONVERSION_PAYMENT_ABI = [{
 	type: 'function',
 	name: 'transferFromWithReferenceAndFee',
 	inputs: [
@@ -22,7 +24,9 @@ export const CUSTOM_PAYMENT_ABI = [{
 		{ name: '_maxToSpend', type: 'uint256' },
 		{ name: '_maxRateTimespan', type: 'uint256' },
 	],
-}, {
+}] as const
+
+export const PAYMENT_SAFE_TRANSFER_ABI = [{
 	type: 'function',
 	name: 'safeTransferFrom',
 	inputs: [
@@ -31,3 +35,5 @@ export const CUSTOM_PAYMENT_ABI = [{
 		{ name: '_amount', type: 'uint256' },
 	],
 }] as const
+
+export const CUSTOM_PAYMENT_ABI = [...DIRECT_PAYMENT_ABI, ...CONVERSION_PAYMENT_ABI, ...PAYMENT_SAFE_TRANSFER_ABI] as const

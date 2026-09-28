@@ -7,7 +7,7 @@ import { TRANSACTION_DEFINITIONS, type AmountTokenReference, type FunctionRule, 
 export type { AmountTokenReference } from './transactionDefinitions.js'
 
 const FUNCTION_RULES: Readonly<Record<string, FunctionRule>> = Object.fromEntries(TRANSACTION_DEFINITIONS.flatMap((definition) =>
-	(definition.functions ?? []).flatMap(({ names, signatures, rule }) => (signatures ?? abiFunctionSignatures(definition.abi, names)).map((signature) => [signature, rule] as const)),
+	(definition.functions ?? []).flatMap(({ names, rule }) => abiFunctionSignatures(definition.abi, names).map((signature) => [signature, rule] as const)),
 ))
 
 const ARGUMENT_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
