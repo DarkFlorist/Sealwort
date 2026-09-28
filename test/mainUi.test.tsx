@@ -54,7 +54,7 @@ type RenderStackOverrides = Partial<Omit<SafeStackPanelProps, 'transactionDataMe
 
 function SafeStackPanelWithMetadata({ walletRequestTimeoutMs, transactionDataMetadataOverride, ...props }: Omit<SafeStackPanelProps, 'transactionDataMetadata'> & { readonly walletRequestTimeoutMs: number | undefined, readonly transactionDataMetadataOverride: SafeStackPanelProps['transactionDataMetadata'] | undefined }) {
 	const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [props.stack] }
-	const transactionDataMetadata = useTransactionDataMetadata(stackExport, { walletRequestTimeoutMs })
+	const { metadata: transactionDataMetadata } = useTransactionDataMetadata(stackExport, { walletRequestTimeoutMs })
 	return <SafeStackPanel { ...props } transactionDataMetadata = { transactionDataMetadataOverride ?? transactionDataMetadata[0] ?? [] } />
 }
 
@@ -251,9 +251,10 @@ describe('Sealwort rendered UI', () => {
 		const transaction = stack.transactions[0]!
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
 		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
-		function Details({ revision }: { revision: number }) {
-			const result = useTransactionDataMetadata(stackExport, { retryRevision: revision })[0]![0]!
-			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } />
+		function Details() {
+			const { metadata, refresh } = useTransactionDataMetadata(stackExport)
+			const result = metadata[0]![0]!
+			return <><button onClick = { refresh }>Retry metadata</button><TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } /></>
 		}
 		const previousEthereum = window.ethereum
 		let authorized = false
@@ -263,10 +264,10 @@ describe('Sealwort rendered UI', () => {
 			return `0x${ '0'.repeat(63) }6`
 		} }
 		try {
-			const view = render(<Details revision = { 0 } />)
+			render(<Details />)
 			await screen.findByText('14411275698 base units')
 			authorized = true
-			view.rerender(<Details revision = { 1 } />)
+			fireEvent.click(screen.getByRole('button', { name: 'Retry metadata' }))
 			await screen.findByText('14411.275698 tokens')
 			assert.equal(screen.queryByText('14411275698 base units'), null)
 		} finally {
@@ -285,9 +286,9 @@ describe('Sealwort rendered UI', () => {
 			...stack, chainId: 1n,
 			transactions: (multiToken ? [MAINNET_TRANSACTION_CONTRACTS.uniswapV2Router.address] : [1n, 2n]).map((to) => ({ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to, data } } })),
 		}] }
-		function Details({ revision }: { revision: number }) {
-			const results = useTransactionDataMetadata(stackExport, { retryRevision: revision })
-			return <div>{ results[0]?.map(({ metadata }) => metadata.status === 'ready' ? Object.values(metadata.tokens).map((token) => token.status).join(',') : metadata.status).join(';') }</div>
+		function Details() {
+			const { metadata: results, refresh } = useTransactionDataMetadata(stackExport)
+			return <><button onClick = { refresh }>Retry metadata</button><div>{ results[0]?.map(({ metadata }) => metadata.status === 'ready' ? Object.values(metadata.tokens).map((token) => token.status).join(',') : metadata.status).join(';') }</div></>
 		}
 		const previousEthereum = window.ethereum
 		const calls: string[] = []
@@ -300,14 +301,14 @@ describe('Sealwort rendered UI', () => {
 			return `0x${ '0'.repeat(63) }6`
 		} }
 		try {
-			const view = render(<Details revision = { 0 } />)
+			render(<Details />)
 			await screen.findByText(multiToken ? 'available,error' : 'available;error')
 			assert.equal(calls.length, 2)
 			authorized = true
-			view.rerender(<Details revision = { 1 } />)
+			fireEvent.click(screen.getByRole('button', { name: 'Retry metadata' }))
 			await screen.findByText(multiToken ? 'available,available' : 'available;available')
 			assert.deepEqual(calls.map(BigInt), [1n, 2n, 2n])
-			view.rerender(<Details revision = { 2 } />)
+			fireEvent.click(screen.getByRole('button', { name: 'Retry metadata' }))
 			await waitFor(() => assert.equal(screen.getByText(multiToken ? 'available,available' : 'available;available').textContent, multiToken ? 'available,available' : 'available;available'))
 			assert.equal(calls.length, 3)
 		} finally {
@@ -321,9 +322,10 @@ describe('Sealwort rendered UI', () => {
 		const transaction = stack.transactions[0]!
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 1n })
 		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
-		function Details({ revision }: { revision: number }) {
-			const result = useTransactionDataMetadata(stackExport, { retryRevision: revision })[0]![0]!
-			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } />
+		function Details() {
+			const { metadata, refresh } = useTransactionDataMetadata(stackExport)
+			const result = metadata[0]![0]!
+			return <><button onClick = { refresh }>Retry metadata</button><TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { stack.chainId } connectedAccount = { undefined } result = { result } /></>
 		}
 		const previousEthereum = window.ethereum
 		let retry = false
@@ -335,10 +337,10 @@ describe('Sealwort rendered UI', () => {
 			throw new Error('Original token lookup failed.')
 		} }
 		try {
-			const view = render(<Details revision = { 0 } />)
+			render(<Details />)
 			await screen.findByText('Original token lookup failed.')
 			retry = true
-			view.rerender(<Details revision = { 1 } />)
+			fireEvent.click(screen.getByRole('button', { name: 'Retry metadata' }))
 			const message = providerFailure === 'wrong-chain' ? 'Switch the injected wallet to chain 11155111 to read this Gnosis Safe’s current information.' : 'Wallet authorization expired.'
 			await screen.findAllByText(message)
 			assert.equal(screen.queryByText('Original token lookup failed.'), null)
@@ -355,7 +357,7 @@ describe('Sealwort rendered UI', () => {
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
 		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
 		function Details({ rpcUrl = 'https://rpc.example.test' }: { rpcUrl?: string }) {
-			const result = useTransactionDataMetadata(stackExport, { ethereumRpcUrl: rpcUrl })[0]![0]!
+			const result = useTransactionDataMetadata(stackExport, { ethereumRpcUrl: rpcUrl }).metadata[0]![0]!
 			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { 1n } connectedAccount = { undefined } result = { result } />
 		}
 		const previousEthereum = window.ethereum
