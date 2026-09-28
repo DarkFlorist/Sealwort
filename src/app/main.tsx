@@ -84,6 +84,7 @@ export function App({
 	const importTextarea = useRef<HTMLTextAreaElement>(null)
 	const updatedStackTextarea = useRef<HTMLTextAreaElement>(null)
 	const stackRevision = useSignal(0)
+	const metadataRetryRevision = useSignal(0)
 	const { information: safeInformation, refresh: refreshSafeInformation } = useSafeInformation(stackRevision, stackExport, ethereumRpcUrl, walletRequestTimeoutMs)
 	const signedStackJson = useSignal<string | undefined>(undefined)
 	const submittedExecutions = useSignal<readonly SubmittedExecution[]>([])
@@ -159,6 +160,7 @@ export function App({
 	}
 
 	const refreshEverything = async (provider: InjectedProvider, manual: boolean) => {
+		metadataRetryRevision.value = metadataRetryRevision.peek() + 1
 		const requestProvider = withWalletRequestTimeout(provider, walletRequestTimeoutMs)
 		const action = 'refresh'
 		const refreshRevision = stackRevision.peek() + 1
@@ -239,6 +241,7 @@ export function App({
 			const walletIdentity = await loadWalletIdentity(provider, connectWalletRevision, true, true)
 			if (walletIdentity === undefined) return
 			if (walletIdentity.status === 'disconnected') return
+			metadataRetryRevision.value = metadataRetryRevision.peek() + 1
 			verifiedSafeStates.value = []
 			loadedStackAtVerification = stackExport.peek()
 			verificationRevision = stackRevision.peek()
@@ -436,7 +439,7 @@ export function App({
 		if (loadedStack !== undefined) runBackgroundTask(refreshSafeInformation(loadedStack, stackRevision.peek()), reportUnexpectedFailure)
 		return persisted
 	}
-	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, { walletRequestTimeoutMs, retryRevision: stackRevision.value, ethereumRpcUrl: ethereumRpcUrl.value })
+	const transactionDataMetadata = useTransactionDataMetadata(stackExport.value, { walletRequestTimeoutMs, retryRevision: metadataRetryRevision.value, ethereumRpcUrl: ethereumRpcUrl.value })
 
 	return <main class = 'shell' aria-busy = { busy || loadingApplicationData }>
 		<header class = 'hero'>

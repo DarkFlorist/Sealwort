@@ -321,8 +321,8 @@ describe('Sealwort rendered UI', () => {
 		const transaction = stack.transactions[0]!
 		const data = createContract(ERC20).approve.encodeInput({ spender: '0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2', value: 14_411_275_698n })
 		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, data } } }] }] }
-		function Details() {
-			const result = useTransactionDataMetadata(stackExport, { ethereumRpcUrl: 'https://rpc.example.test' })[0]![0]!
+		function Details({ rpcUrl = 'https://rpc.example.test' }: { rpcUrl?: string }) {
+			const result = useTransactionDataMetadata(stackExport, { ethereumRpcUrl: rpcUrl })[0]![0]!
 			return <TransactionDataDetails data = { data } destination = { transaction.safeTx.message.to } transactionValue = { 0n } chainId = { 1n } connectedAccount = { undefined } result = { result } />
 		}
 		const previousEthereum = window.ethereum
@@ -332,18 +332,23 @@ describe('Sealwort rendered UI', () => {
 		} }
 		if (!walletAvailable) delete window.ethereum
 		const fetchMock = spyOn(globalThis, 'fetch').mockImplementation(Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
-			assert.equal(String(input), 'https://rpc.example.test')
+			assert.ok(['https://rpc.example.test', 'https://replacement.example.test'].includes(String(input)))
 			const body = JSON.parse(String(init?.body))
 			assert.equal(body.method, 'eth_call')
-			return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: `0x${ '0'.repeat(63) }6` }))
+			return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: `0x${ '0'.repeat(63) }${ String(input) === 'https://rpc.example.test' ? '6' : '8' }` }))
 		}, { preconnect: globalThis.fetch.preconnect }))
 		try {
-			render(<Details />)
+			const view = render(<Details />)
 			if (walletAvailable) {
 				await screen.findByText('Unauthorized')
 				assert.notEqual(screen.getByText('14411275698 base units'), undefined)
 			} else await screen.findByText('14411.275698 tokens')
 			assert.equal(fetchMock.mock.calls.length, walletAvailable ? 0 : 1)
+			if (!walletAvailable) {
+				view.rerender(<Details rpcUrl = 'https://replacement.example.test' />)
+				await screen.findByText('144.11275698 tokens')
+				assert.equal(fetchMock.mock.calls.length, 2)
+			}
 		} finally {
 			fetchMock.mockRestore()
 			if (previousEthereum === undefined) delete window.ethereum

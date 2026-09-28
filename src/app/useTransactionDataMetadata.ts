@@ -127,7 +127,7 @@ type TransactionDataMetadataOptions = {
 }
 
 export function useTransactionDataMetadata(stackExport: SafeStackExport | undefined, { walletRequestTimeoutMs, retryRevision = 0, ethereumRpcUrl = DEFAULT_ETHEREUM_RPC_URL }: TransactionDataMetadataOptions = {}) {
-	const revision = stackMetadataRevision(stackExport)
+	const revision = JSON.stringify([stackMetadataRevision(stackExport), ethereumRpcUrl])
 	const initial = initialMetadata(stackExport)
 	const state = useSignal<{ readonly revision: string, readonly metadata: TransactionDataMetadata }>({ revision, metadata: initial })
 
