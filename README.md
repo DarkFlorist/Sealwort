@@ -22,17 +22,18 @@ their signature threshold.
 
 ![Sealwort displaying a newly signed Gnosis Safe stack](docs/sealwort-signed.png)
 
-Sealwort reads current Safe information through the injected wallet when it is on
-the stack's chain. For Ethereum mainnet stacks, it falls back to the HTTP or HTTPS
-endpoint selected in RPC settings when no matching injected provider is available. The
-default is `https://ethereum.dark.florist`, and a custom choice is preserved in
-local browser storage. Using the fallback discloses the imported Safe address to
-that RPC. Signing always requires an injected owner wallet and never uses the
-fallback RPC.
+Sealwort reads current Safe information through the injected wallet. Switch the
+wallet to the stack's chain if needed; wallet errors never trigger a switch to
+the configured RPC. When no injected provider is available, Ethereum mainnet
+reads use the HTTP or HTTPS endpoint selected in RPC settings. The default is
+`https://ethereum.dark.florist`, and a custom choice is preserved in local browser
+storage. These reads disclose the imported Safe address to that RPC. Signing
+always requires an injected owner wallet and never uses the configured RPC.
 
 Sealwort preserves the pasted stack in local browser storage, so refreshing the
 page does not discard an in-progress signing session. The Refresh action reloads
-wallet identity and stack state; balances and active-signer information load
+wallet identity and stack state and retries failed transaction metadata reads
+while retaining successful token metadata; balances and active-signer information load
 independently without hiding the rest of the account summary.
 If browser storage is unavailable, Sealwort keeps signing available but warns that
 refreshing or reopening the page may lose the current stack or restore an older one.
