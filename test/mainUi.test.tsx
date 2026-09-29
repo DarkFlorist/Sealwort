@@ -7,9 +7,11 @@ import { SAFE_STACK_EXPORT_NAME, SAFE_STACK_FORMAT_VERSION, type SafeStackExport
 import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
+import { TransactionDataDetails } from '../src/app/components/TransactionDataDetails.js'
+import { decodeTransactionData } from '../src/app/transactionDecoder.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
 import { createContract, ERC20, ERC721 } from 'micro-eth-signer/advanced/abi.js'
-import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
+import { CONVERSION_PAYMENT_ABI, PAYMENT_SAFE_TRANSFER_ABI } from '../src/app/abis/customPayment.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { UNISWAP_V2_ROUTER_ABI } from '../src/app/abis/uniswapV2Router.js'
 import { UNISWAP_V3_ROUTER_ABI } from '../src/app/abis/uniswapV3Router.js'
@@ -266,8 +268,33 @@ describe('Sealwort rendered UI', () => {
 		}
 	})
 
+	test('formats conversion request amounts in the first currency and the spend cap in the last currency', () => {
+		// Erc20ConversionProxy converts request amount and fee before comparing their sum to maxToSpend.
+		const data = createContract(CONVERSION_PAYMENT_ABI).transferFromWithReferenceAndFee.encodeInput({
+			_to: '0x0000000000000000000000000000000000003333',
+			_requestAmount: 1_500_000_000_000_000_000n,
+			_path: ['0x0000000000000000000000000000000000001111', '0x0000000000000000000000000000000000002222'],
+			_paymentReference: new Uint8Array([1]),
+			_feeAmount: 250_000_000_000_000_000n,
+			_feeAddress: '0x0000000000000000000000000000000000004444',
+			_maxToSpend: 2_000_000n,
+			_maxRateTimespan: 3600n,
+		})
+		render(<TransactionDataDetails data = { data } destination = { 0x9999n } transactionValue = { 0n } chainId = { 1n } connectedAccount = { undefined } result = { {
+			decoded: decodeTransactionData(1n, 0x9999n, data),
+			metadata: { status: 'ready', vaultAsset: undefined, vaultAssetError: undefined, tokens: {
+				'1111': { status: 'available', decimals: 18 },
+				'2222': { status: 'available', decimals: 6 },
+			} },
+		} } />)
+		assert.equal(screen.getByText('Request amount').nextElementSibling?.textContent, '1.5 tokens')
+		assert.equal(screen.getByText('Fee amount').nextElementSibling?.textContent, '0.25 tokens')
+		assert.equal(screen.getByText('Max to spend').nextElementSibling?.textContent, '2 tokens')
+		assert.equal(screen.getByText('Max rate timespan').nextElementSibling?.textContent, '3600')
+	})
+
 	test('falls back to a parsed token helper when ERC-721 classification times out', async () => {
-		const data = createContract(CUSTOM_PAYMENT_ABI).safeTransferFrom.encodeInput({
+		const data = createContract(PAYMENT_SAFE_TRANSFER_ABI).safeTransferFrom.encodeInput({
 			_tokenAddress: '0x0000000000000000000000000000000000001111',
 			_to: '0x0000000000000000000000000000000000002222',
 			_amount: 1_500_000n,
@@ -318,7 +345,7 @@ describe('Sealwort rendered UI', () => {
 
 	test('renders the shared selector as the token helper when the destination is not ERC-721', async () => {
 		const token = '0x0000000000000000000000000000000000001111'
-		const data = createContract(CUSTOM_PAYMENT_ABI).safeTransferFrom.encodeInput({ _tokenAddress: token, _to: '0x0000000000000000000000000000000000002222', _amount: 1_500_000n })
+		const data = createContract(PAYMENT_SAFE_TRANSFER_ABI).safeTransferFrom.encodeInput({ _tokenAddress: token, _to: '0x0000000000000000000000000000000000002222', _amount: 1_500_000n })
 		const stack = createStack()
 		const transaction = stack.transactions[0]!
 		const previousEthereum = window.ethereum

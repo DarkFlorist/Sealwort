@@ -5,7 +5,7 @@ import { getAddressLabel } from '../src/app/addressLabels.js'
 import { ContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from '../src/app/contractMetadata.js'
 import { decodeTransactionData } from '../src/app/transactionDecoder.js'
 import { amountTokenForArgument, amountTokenReferences, argumentLabel, resolveTransactionInterpretation, transactionNeedsErc721Resolution, transactionValuePresentation } from '../src/app/transactionSemantics.js'
-import { CUSTOM_PAYMENT_ABI } from '../src/app/abis/customPayment.js'
+import { CONVERSION_PAYMENT_ABI, DIRECT_PAYMENT_ABI, PAYMENT_SAFE_TRANSFER_ABI } from '../src/app/abis/customPayment.js'
 import { ERC2612_ABI } from '../src/app/abis/erc2612.js'
 import { ERC4626_ABI } from '../src/app/abis/erc4626.js'
 import { ERC7540_ABI } from '../src/app/abis/erc7540.js'
@@ -105,19 +105,78 @@ describe('transaction calldata parsing', () => {
 	})
 
 	test('decodes both requested payment helper signatures', () => {
-		const contract = createContract(CUSTOM_PAYMENT_ABI)
 		const tokenAddress = '0x0000000000000000000000000000000000001111'
 		const to = '0x0000000000000000000000000000000000002222'
 		const feeAddress = '0x0000000000000000000000000000000000003333'
 		const calls = [
-			contract.transferFromWithReferenceAndFee.encodeInput({ _tokenAddress: tokenAddress, _to: to, _amount: 2n, _paymentReference: new Uint8Array([1, 2]), _feeAmount: 1n, _feeAddress: feeAddress }),
-			contract.safeTransferFrom.encodeInput({ _tokenAddress: tokenAddress, _to: to, _amount: 2n }),
+			createContract(DIRECT_PAYMENT_ABI).transferFromWithReferenceAndFee.encodeInput({ _tokenAddress: tokenAddress, _to: to, _amount: 2n, _paymentReference: new Uint8Array([1, 2]), _feeAmount: 1n, _feeAddress: feeAddress }),
+			createContract(PAYMENT_SAFE_TRANSFER_ABI).safeTransferFrom.encodeInput({ _tokenAddress: tokenAddress, _to: to, _amount: 2n }),
 		]
 		for (const data of calls) assert.equal(decodeTransactionData(1n, destination, data).status, 'decoded')
+		const payment = decodeTransactionData(1n, destination, calls[0]!)
+		assert.equal(payment.status, 'decoded')
+		if (payment.status === 'decoded') {
+			const scope = payment.call.arguments as Readonly<Record<string, unknown>>
+			assert.deepEqual(amountTokenReferences(payment.call), [BigInt(tokenAddress)])
+			assert.equal(amountTokenForArgument(payment.call, '_amount', scope), BigInt(tokenAddress))
+			assert.equal(amountTokenForArgument(payment.call, '_feeAmount', scope), BigInt(tokenAddress))
+		}
 		const safeTransfer = decodeTransactionData(1n, destination, calls[1]!)
 		assert.equal(transactionNeedsErc721Resolution(safeTransfer), true)
 		const resolved = resolveTransactionInterpretation(safeTransfer, false)
 		assert.equal(resolved.status === 'decoded' && Object.hasOwn(resolved.call.arguments ?? {}, '_tokenAddress'), true)
+	})
+
+	test('decodes the eight-parameter payment overload with selector 0x3af2c012', () => {
+		const [signature] = abiFunctionSignatures(CONVERSION_PAYMENT_ABI)
+		const args = {
+			_to: secondAddress,
+			_requestAmount: 100n,
+			_path: [firstAddress, secondAddress],
+			_paymentReference: new Uint8Array([1, 2, 3]),
+			_feeAmount: 2n,
+			_feeAddress: firstAddress,
+			_maxToSpend: 150n,
+			_maxRateTimespan: 3600n,
+		}
+		const data = createContract(CONVERSION_PAYMENT_ABI).transferFromWithReferenceAndFee.encodeInput(args)
+		assert.equal(Buffer.from(data.subarray(0, 4)).toString('hex'), '3af2c012')
+		const decoded = decodeTransactionData(1n, destination, data)
+		assert.equal(decoded.status, 'decoded')
+		if (decoded.status !== 'decoded') return
+		assert.equal(decoded.call.signature, signature)
+		assert.deepEqual(decoded.call.arguments, args)
+		const scope = decoded.call.arguments as Readonly<Record<string, unknown>>
+		assert.deepEqual(amountTokenReferences(decoded.call), [BigInt(firstAddress), BigInt(secondAddress)])
+		assert.equal(amountTokenForArgument(decoded.call, '_requestAmount', scope), BigInt(firstAddress))
+		assert.equal(amountTokenForArgument(decoded.call, '_feeAmount', scope), BigInt(firstAddress))
+		assert.equal(amountTokenForArgument(decoded.call, '_maxToSpend', scope), BigInt(secondAddress))
+		assert.equal(amountTokenForArgument(decoded.call, '_maxRateTimespan', scope), undefined)
+	})
+
+	test('uses the same underscore fallback and precedence for field and path sources', () => {
+		const [conversionSignature] = abiFunctionSignatures(CONVERSION_PAYMENT_ABI)
+		const [directSignature] = abiFunctionSignatures(DIRECT_PAYMENT_ABI)
+		assert.ok(conversionSignature !== undefined && directSignature !== undefined)
+		for (const plain of [undefined, null, firstAddress]) {
+			const fieldScope = { _amount: 100n, tokenAddress: plain, _tokenAddress: secondAddress }
+			const fieldCall = { name: 'transferFromWithReferenceAndFee', signature: directSignature, arguments: fieldScope }
+			const pathScope = { _requestAmount: 100n, _feeAmount: 2n, _maxToSpend: 150n,
+				path: plain == null ? plain : [firstAddress, secondAddress], _path: [secondAddress, firstAddress] }
+			const pathCall = { name: 'transferFromWithReferenceAndFee', signature: conversionSignature, arguments: pathScope }
+			const first = BigInt(plain ?? secondAddress)
+			const last = BigInt(plain == null ? firstAddress : secondAddress)
+			assert.equal(amountTokenForArgument(fieldCall, '_amount', fieldScope), first)
+			assert.equal(amountTokenForArgument(pathCall, '_requestAmount', pathScope), first)
+			assert.equal(amountTokenForArgument(pathCall, '_feeAmount', pathScope), first)
+			assert.equal(amountTokenForArgument(pathCall, '_maxToSpend', pathScope), last)
+		}
+		// A present but invalid value must not silently select a different argument.
+		for (const value of [[], ['invalid-address']]) {
+			const scope = { _requestAmount: 100n, path: value, _path: [firstAddress, secondAddress] }
+			const call = { name: 'transferFromWithReferenceAndFee', signature: conversionSignature, arguments: scope }
+			assert.deepEqual(amountTokenReferences(call), [])
+		}
 	})
 
 	test('resolves the shared safeTransferFrom selector without depending on ABI order', () => {
