@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
+import { getRegisteredTokens } from './addressRegistry.js'
 import { isContractMetadataUnavailableError, readIsErc721, readTokenDecimals, readVaultAsset } from './contractMetadata.js'
 import { DEFAULT_ETHEREUM_RPC_URL } from './rpcSettings.js'
 import { getSafeReadProvider } from './readProvider.js'
@@ -140,7 +141,11 @@ async function loadStackMetadata(stackExport: SafeStackExport, walletRequestTime
 		return await loadMetadata(decoded, transaction.safeTx.message.to, {
 			isErc721: (address) => cache.interface(`${ stack.chainId }:${ address }`, async () => readIsErc721(await providerForChain(stack.chainId), address)),
 			vaultAsset: (address) => cache.asset(`${ stack.chainId }:${ address }`, async () => readVaultAsset(await providerForChain(stack.chainId), address)),
-			token: (address) => cache.token(`${ stack.chainId }:${ address }`, async () => readTokenMetadata(await providerForChain(stack.chainId), address)),
+			token: (address) => cache.token(`${ stack.chainId }:${ address }`, async () => {
+				const decimals = getRegisteredTokens(stack.chainId).find((token) => token.address === address)?.decimals
+				if (decimals !== undefined) return { status: 'available', decimals }
+				return readTokenMetadata(await providerForChain(stack.chainId), address)
+			}),
 		}).then(
 			(result) => result,
 			(metadataError: unknown) => ({ decoded, metadata: { status: 'failed', message: getUserFacingErrorMessage(metadataError) } }) as const,
