@@ -6,12 +6,13 @@ export type RegisteredToken = {
 	readonly address: bigint
 	readonly symbol: string
 	readonly label: string
+	readonly decimals?: number
 }
 
 type NativeAssetIdentity = { readonly symbol: string, readonly label: string }
 type BalanceTokenRegistry = { readonly usdc?: RegisteredToken }
 
-const token = (address: bigint, symbol: string, label: string): RegisteredToken => ({ address, symbol, label })
+const token = (address: bigint, symbol: string, label: string, decimals?: number): RegisteredToken => ({ address, symbol, label, ...(decimals === undefined ? {} : { decimals }) })
 
 function transactionContracts<const Definitions extends Readonly<Record<string, { readonly address: bigint, readonly label: string }>>>(definitions: Definitions) {
 	return Object.fromEntries(Object.entries(definitions).map(([decoder, identity]) => [decoder, { decoder, chainId: ETHEREUM_MAINNET_CHAIN_ID, ...identity }])) as {
@@ -19,8 +20,8 @@ function transactionContracts<const Definitions extends Readonly<Record<string, 
 	}
 }
 
-const MAINNET_USDC = token(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, 'USDC', 'USDC')
-const SEPOLIA_USDC = token(0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n, 'USDC', 'USDC')
+const MAINNET_USDC = token(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, 'USDC', 'USDC', 6)
+const SEPOLIA_USDC = token(0x1c7d4b196cb0c7b01d743fbc6116a902379c7238n, 'USDC', 'USDC', 6)
 
 export const MAINNET_TRANSACTION_CONTRACTS = transactionContracts({
 	uniswapV2Router: { address: 0x7a250d5630b4cf539739df2c5dacb4c659f2488dn, label: 'Uniswap V2 Router' },

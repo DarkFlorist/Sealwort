@@ -29,18 +29,18 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 	const callValuePresentation = decoded.status === 'decoded' ? transactionValuePresentation(decoded.call) : undefined
 
 	const renderAmount = (value: bigint, reference: AmountTokenReference) => {
-		const unavailable = (message: string) => <><span>{ value.toString() } base units</span> <span class = 'data-parse-error'>{ message }</span></>
+		const unavailable = () => <span>{ value.toString() } base units</span>
 		const address = resolveTokenAddress(reference, destination, metadata.status === 'ready' ? metadata.vaultAsset : undefined)
 		if (address === 'native') return formatTokenAmount(value, 18, getNativeAssetSymbol(chainId))
 		if (address === 'liquidity') return formatTokenAmount(value, 18, 'LP tokens')
-		if (metadata.status === 'failed') return unavailable(metadata.message)
+		if (metadata.status === 'failed') return unavailable()
 		if (metadata.status !== 'ready') return 'Reading token decimals…'
-		if (reference === 'vaultAsset' && metadata.vaultAssetError !== undefined) return unavailable(metadata.vaultAssetError)
-		if (address === undefined) return unavailable('Token decimals unavailable.')
+		if (reference === 'vaultAsset' && metadata.vaultAssetError !== undefined) return unavailable()
+		if (address === undefined) return unavailable()
 		const token = metadata.tokens[tokenMetadataKey(address)]
 		if (token?.status === 'available') return formatTokenAmount(value, token.decimals, getAddressLabel(address, chainId))
 		if (token?.status === 'nft') return value.toString()
-		return unavailable(token?.message ?? 'Token decimals unavailable.')
+		return unavailable()
 	}
 	function renderValue(name: string, value: unknown, scope: Readonly<Record<string, unknown>>, key: string): ComponentChildren {
 		const address = decodedAddress(value)
@@ -76,7 +76,6 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 						? <span class = 'data-parse-error'>Invalid calldata: { decoded.error }</span>
 						: <div class = 'decoded-call'>
 							<strong>{ decoded.call.name }</strong>
-							{ metadata.status === 'failed' ? <div class = 'data-parse-error'>{ metadata.message }</div> : <></> }
 							{ callValuePresentation === undefined ? <></> : <dl><dt>{ callValuePresentation.label }</dt><dd>{ formatTokenAmount(transactionValue, callValuePresentation.decimals, getAddressLabel(destination, chainId) ?? callValuePresentation.fallbackSymbol) }</dd></dl> }
 							{ transactionNeedsErc721Resolution(decoded) ? <span class = 'muted'>Identifying transfer…</span> : decodedArguments(decoded.call).length === 0 ? <></> : Array.isArray(decoded.call.arguments)
 				? <div class = 'decoded-nested'>{ decoded.call.arguments.map((value, index) => isDecodedRecord(value) ? <dl key = { index }>{ renderFields(value, `argument:${ index }`) }</dl> : <div key = { index }>{ displayDecodedValue(value, chainId, connectedAccount) }</div>) }</div>

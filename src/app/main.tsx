@@ -13,6 +13,7 @@ import type { PendingAction, SubmittedExecution, TransactionActionError } from '
 import { WalletSummary } from './components/WalletSummary.js'
 import { StackJsonInput, UpdatedStackPanel } from './components/StackJsonPanels.js'
 import { SafeStackPanel } from './components/SafeStackPanel.js'
+import { ErrorNotice } from './components/ErrorNotice.js'
 import { useExecutionGasChecks } from './useExecutionGasChecks.js'
 import { createTransactionActions } from './transactionActions.js'
 import { useWalletState } from './useWalletState.js'
@@ -501,7 +502,7 @@ export function App({
 		/>
 
 		{ persistenceWarning.value === undefined ? <></> : <div class = 'notice' role = 'status' aria-live = 'polite'>{ persistenceWarning.value }</div> }
-		{ error.value === undefined ? <></> : <div class = 'notice' role = 'alert'>{ error.value }</div> }
+		<ErrorNotice error = { error.value } transactionDataMetadata = { transactionDataMetadata }/>
 		{ status.value === undefined
 			? <></>
 			: <div class = { `notice ${ statusIsLoading ? 'loading' : 'success' }` } role = 'status' aria-live = 'polite'>
