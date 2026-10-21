@@ -8,10 +8,11 @@ import { METAMASK_SWAP_ROUTER_ABI } from './abis/metaMaskSwapRouter.js'
 import { UNISWAP_V2_ROUTER_ABI } from './abis/uniswapV2Router.js'
 import { UNISWAP_V3_ROUTER_ABI } from './abis/uniswapV3Router.js'
 import { ETHEREUM_MAINNET_CHAIN_ID, getRegisteredTransactionContracts, type RegisteredTransactionContract } from './addressRegistry.js'
+import type { RequestCurrency } from './requestCurrencies.js'
 
-export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint
+export type AmountTokenReference = 'destination' | 'liquidity' | 'native' | 'vaultAsset' | bigint | RequestCurrency
 // Field names omit a leading underscore; both field and path sources resolve the ABI spelling.
-export type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: { readonly field: string, readonly end: 'first' | 'last' } }
+export type TokenSource = AmountTokenReference | { readonly field: string } | { readonly path: { readonly field: string, readonly end: 'first' | 'last', readonly requestCurrency?: boolean } }
 export type AmountRules = Readonly<Record<string, TokenSource>>
 export type FunctionRule = {
 	readonly amounts?: AmountRules
@@ -30,6 +31,7 @@ export type TransactionDefinition = {
 
 const field = (name: string): TokenSource => ({ field: name })
 const path = (field: string, end: 'first' | 'last'): TokenSource => ({ path: { field, end } })
+const requestPath = (end: 'first' | 'last'): TokenSource => ({ path: { field: 'path', end, requestCurrency: true } })
 const functionRule = (names: readonly string[], amounts: AmountRules): FunctionRuleDefinition => ({ names, rule: { amounts } })
 // Uniswap V3 exact-output paths are encoded backwards: output token first, input token last.
 const exactOutputPathAmounts = { amountOut: path('path', 'first'), amountInMaximum: path('path', 'last') } as const
@@ -94,7 +96,7 @@ export const TRANSACTION_DEFINITIONS: readonly TransactionDefinition[] = [
 	{ abi: CONVERSION_PAYMENT_ABI, functions: [
 		// Erc20ConversionProxy converts requestAmount/feeAmount from _path[0], then caps their converted sum in the last currency.
 		// https://github.com/RequestNetwork/requestNetwork/blob/e7a48e42d55d96f6dbc947895e0677df28942736/packages/smart-contracts/src/contracts/Erc20ConversionProxy.sol#L67-L98
-		functionRule(['transferFromWithReferenceAndFee'], { requestAmount: path('path', 'first'), feeAmount: path('path', 'first'), maxToSpend: path('path', 'last') }),
+		functionRule(['transferFromWithReferenceAndFee'], { requestAmount: requestPath('first'), feeAmount: requestPath('first'), maxToSpend: requestPath('last') }),
 	] },
 	{ abi: PAYMENT_SAFE_TRANSFER_ABI, functions: [
 		{ names: ['safeTransferFrom'], rule: { amounts: { amount: field('tokenAddress') }, ambiguity: { erc721Arguments: ['from', 'to', 'tokenId'], fallbackArguments: ['_tokenAddress', '_to', '_amount'] } } },

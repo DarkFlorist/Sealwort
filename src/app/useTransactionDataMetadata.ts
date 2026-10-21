@@ -28,7 +28,7 @@ async function settle<T>(promise: Promise<T>): Promise<SettledResult<T>> {
 
 function needsProvider(decoded: TransactionDataDecodeResult) {
 	return decoded.status === 'decoded' && (transactionNeedsErc721Resolution(decoded)
-		|| amountTokenReferences(decoded.call).some((reference) => reference !== 'native' && reference !== 'liquidity'))
+		|| amountTokenReferences(decoded.call).some((reference) => typeof reference !== 'object' && reference !== 'native' && reference !== 'liquidity'))
 }
 
 // Share pending reads and retain successes. Failed reads are removed for the next refresh.
@@ -99,6 +99,7 @@ async function loadMetadata(initialDecoded: TransactionDataDecodeResult, destina
 			: getUserFacingErrorMessage(assetResult.reason)
 	}
 	const addresses = references.flatMap((reference) => {
+		if (typeof reference === 'object') return []
 		if (reference === 'native' || reference === 'liquidity') return []
 		if (reference === 'destination') return [destination]
 		if (reference === 'vaultAsset') return vaultAsset === undefined ? [] : [vaultAsset]
