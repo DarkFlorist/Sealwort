@@ -1,6 +1,7 @@
 import { abiFunctionSignatures } from './abiSignatures.js'
 import { NATIVE_TOKEN_SENTINEL } from './addressRegistry.js'
 import { bytesToHex } from './ethereum.js'
+import { getRequestCurrency } from './requestCurrencies.js'
 import type { DecodedTransactionData, TransactionDataDecodeResult } from './transactionDecoder.js'
 import { TRANSACTION_DEFINITIONS, type AmountTokenReference, type FunctionRule, type TokenSource } from './transactionDefinitions.js'
 
@@ -56,7 +57,10 @@ function rulesForScope(call: DecodedTransactionData, scope: Readonly<Record<stri
 
 function resolveSource(source: TokenSource, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {
 	if (typeof source === 'bigint' || typeof source === 'string') return source
-	return 'field' in source ? fieldToken(scope, source.field) : pathToken(sourceArgument(scope, source.path.field), source.path.end)
+	if ('currency' in source) return source
+	if ('field' in source) return fieldToken(scope, source.field)
+	const address = pathToken(sourceArgument(scope, source.path.field), source.path.end)
+	return address === undefined ? undefined : source.path.requestCurrency ? getRequestCurrency(address) ?? address : address
 }
 
 export function amountTokenForArgument(call: DecodedTransactionData, argumentName: string, scope: Readonly<Record<string, unknown>>): AmountTokenReference | undefined {
@@ -131,6 +135,7 @@ export function tokenMetadataKey(address: bigint) {
 }
 
 export function resolveTokenAddress(reference: AmountTokenReference, destination: bigint, vaultAsset: bigint | undefined) {
+	if (typeof reference === 'object') return reference
 	if (reference === 'liquidity' || reference === 'native') return reference
 	if (reference === 'destination') return destination
 	if (reference === 'vaultAsset') return vaultAsset

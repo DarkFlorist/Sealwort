@@ -8,7 +8,6 @@ import type { VerifiedSafeState } from '../src/app/safeStackValidation.js'
 import { TransactionDataDetails } from '../src/app/components/TransactionDataDetails.js'
 import { SafeStackPanel } from '../src/app/components/SafeStackPanel.js'
 import { StackJsonInput, UpdatedStackPanel } from '../src/app/components/StackJsonPanels.js'
-import { TransactionDataDetails } from '../src/app/components/TransactionDataDetails.js'
 import { decodeTransactionData } from '../src/app/transactionDecoder.js'
 import { WalletSummary } from '../src/app/components/WalletSummary.js'
 import { createContract, ERC20, ERC721 } from 'micro-eth-signer/advanced/abi.js'
@@ -437,6 +436,49 @@ describe('Sealwort rendered UI', () => {
 		assert.equal(screen.getByText('Fee amount').nextElementSibling?.textContent, '0.25 tokens')
 		assert.equal(screen.getByText('Max to spend').nextElementSibling?.textContent, '2 tokens')
 		assert.equal(screen.getByText('Max rate timespan').nextElementSibling?.textContent, '3600')
+	})
+
+	for (const rpcFails of [false, true]) test(`formats Request USD without calling decimals on its currency identifier (RPC fails: ${ rpcFails })`, async () => {
+		const destination = 0xe72ecea44b6d8b2b3cf5171214d9730e86213ca2n
+		const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+		const data = createContract(CONVERSION_PAYMENT_ABI).transferFromWithReferenceAndFee.encodeInput({
+			_to: '0x6c15a87e2d8a0cff4b8914554db26a38007736bc',
+			_requestAmount: 1_721_300_000_000n,
+			_path: ['0x775eb53d00dd0acd3ec1696472105d579b9b386b', usdc],
+			_paymentReference: new Uint8Array([10, 16, 127, 94, 41, 127, 56, 83]),
+			_feeAmount: 0n,
+			_feeAddress: '0x35d0e078755cd84d3e0656caab417dee1d7939c7',
+			_maxToSpend: 17_387_641_818n,
+			_maxRateTimespan: 0n,
+		})
+		const stack = createStack()
+		const transaction = stack.transactions[0]!
+		const stackExport: SafeStackExport = { name: SAFE_STACK_EXPORT_NAME, version: SAFE_STACK_FORMAT_VERSION, stacks: [{ ...stack, chainId: 1n, transactions: [{ ...transaction, safeTx: { ...transaction.safeTx, message: { ...transaction.safeTx.message, to: destination, data } } }] }] }
+		function Details() {
+			const { metadata } = useTransactionDataMetadata(stackExport)
+			return <TransactionDataDetails data = { data } destination = { destination } transactionValue = { 0n } chainId = { 1n } connectedAccount = { undefined } result = { metadata[0]![0]! } />
+		}
+		const previousEthereum = window.ethereum
+		const calledAddresses: string[] = []
+		window.ethereum = { request: async ({ method, params }) => {
+			if (method === 'eth_chainId') return '0x1'
+			assert.equal(method, 'eth_call')
+			const call = (params as readonly { to: string }[])[0]!
+			calledAddresses.push(call.to.toLowerCase())
+			if (rpcFails) throw new Error('RPC unavailable')
+			return `0x${ '0'.repeat(63) }6`
+		} }
+		try {
+			render(<Details />)
+			await screen.findByText(rpcFails ? 'RPC unavailable' : '17387.641818 USDC')
+			assert.equal(screen.getByText('Request amount').nextElementSibling?.textContent, '17213 USD')
+			assert.equal(screen.getByText('Fee amount').nextElementSibling?.textContent, '0 USD')
+			assert.deepEqual(calledAddresses, [usdc])
+			assert.equal(screen.queryByText('Could not read this token’s decimals.'), null)
+		} finally {
+			if (previousEthereum === undefined) delete window.ethereum
+			else window.ethereum = previousEthereum
+		}
 	})
 
 	test('falls back to a parsed token helper when ERC-721 classification times out', async () => {

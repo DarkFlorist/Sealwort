@@ -31,6 +31,7 @@ export function TransactionDataDetails({ data, destination, transactionValue, ch
 	const renderAmount = (value: bigint, reference: AmountTokenReference) => {
 		const unavailable = (message: string) => <><span>{ value.toString() } base units</span> <span class = 'data-parse-error'>{ message }</span></>
 		const address = resolveTokenAddress(reference, destination, metadata.status === 'ready' ? metadata.vaultAsset : undefined)
+		if (typeof address === 'object') return formatTokenAmount(value, address.decimals, address.currency)
 		if (address === 'native') return formatTokenAmount(value, 18, getNativeAssetSymbol(chainId))
 		if (address === 'liquidity') return formatTokenAmount(value, 18, 'LP tokens')
 		if (metadata.status === 'failed') return unavailable(metadata.message)

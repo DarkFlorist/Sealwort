@@ -1,4 +1,6 @@
 import * as assert from 'node:assert'
+import { keccak_256 } from '@noble/hashes/sha3'
+import { getRequestCurrency } from '../src/app/requestCurrencies.js'
 import { describe, test } from 'bun:test'
 import { createContract, ERC1155, ERC20, ERC721, WETH, type ContractABI } from 'micro-eth-signer/advanced/abi.js'
 import { getAddressLabel } from '../src/app/addressLabels.js'
@@ -152,6 +154,23 @@ describe('transaction calldata parsing', () => {
 		assert.equal(amountTokenForArgument(decoded.call, '_feeAmount', scope), BigInt(firstAddress))
 		assert.equal(amountTokenForArgument(decoded.call, '_maxToSpend', scope), BigInt(secondAddress))
 		assert.equal(amountTokenForArgument(decoded.call, '_maxRateTimespan', scope), undefined)
+	})
+
+	test('recognizes USD only in Request conversion paths and uses the contract’s eight fiat decimals', () => {
+		const hash = Buffer.from(keccak_256(new TextEncoder().encode(JSON.stringify({ type: 'ISO4217', value: 'USD' }).toLowerCase()))).toString('hex').slice(-40)
+		assert.equal(hash, '775eb53d00dd0acd3ec1696472105d579b9b386b')
+		const usd = BigInt(`0x${ hash }`)
+		assert.deepEqual(getRequestCurrency(usd), { currency: 'USD', decimals: 8 })
+		const [signature] = abiFunctionSignatures(CONVERSION_PAYMENT_ABI)
+		assert.ok(signature !== undefined)
+		const scope = { _path: [`0x${ hash }`, secondAddress], _requestAmount: 1_721_300_000_000n, _feeAmount: 0n }
+		const call = { name: 'transferFromWithReferenceAndFee', signature, arguments: scope }
+		assert.deepEqual(amountTokenReferences(call), [{ currency: 'USD', decimals: 8 }])
+		const [directSignature] = abiFunctionSignatures(DIRECT_PAYMENT_ABI)
+		assert.ok(directSignature !== undefined)
+		const directScope = { _tokenAddress: `0x${ hash }`, _amount: 100n }
+		assert.equal(amountTokenForArgument({ name: call.name, signature: directSignature, arguments: directScope }, '_amount', directScope), usd)
+		assert.equal(getRequestCurrency(0x1234n), undefined)
 	})
 
 	test('uses the same underscore fallback and precedence for field and path sources', () => {
